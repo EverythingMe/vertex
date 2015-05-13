@@ -17,17 +17,41 @@ func (h TestHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}
 	return fmt.Sprintf("Your bar is %s", h.Bar), nil
 }
 
-var loggingMW = MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next Middleware) (interface{}, error) {
+var loggingMW = MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
 	logging.Info("Logging request %s", r.URL.String())
-	return "WAT", nil
+	return next(w, r)
 })
+
+func TestMiddleware(t *testing.T) {
+
+	mw1 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+		fmt.Println("mw1")
+		return next(w, r)
+	})
+
+	mw2 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+		fmt.Println("mw2")
+		if next != nil {
+			return next(w, r)
+		}
+		return nil, nil
+
+	})
+
+	chain := buildChain([]Middleware{mw1, mw2})
+
+	chain.Handle(nil, nil)
+
+}
 
 func TestAPI(t *testing.T) {
 
+	//t.SkipNow()
+
 	a := API{
-		Name:    "testung",
-		Version: "1.0",
-		//Middleware: []Middleware{loggingMW},
+		Name:       "testung",
+		Version:    "1.0",
+		Middleware: []Middleware{loggingMW},
 		Routes: RouteMap{
 			"/foo": {
 				Description: "Get Bar By Foo",

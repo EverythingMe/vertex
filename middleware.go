@@ -3,12 +3,14 @@ package web2
 import "net/http"
 
 type Middleware interface {
-	Handle(w http.ResponseWriter, r *http.Request, next Middleware) (interface{}, error)
+	Handle(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error)
 }
 
-type MiddlewareFunc func(http.ResponseWriter, *http.Request, Middleware) (interface{}, error)
+type MiddlewareFunc func(http.ResponseWriter, *http.Request, HandlerFunc) (interface{}, error)
 
-func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *http.Request, next Middleware) (interface{}, error) {
+type HandlerFunc func(http.ResponseWriter, *http.Request) (interface{}, error)
+
+func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
 	return f(w, r, next)
 }
 
@@ -17,9 +19,17 @@ type step struct {
 	next *step
 }
 
-func (s *step) Handle(w http.ResponseWriter, r *http.Request, next Middleware) (interface{}, error) {
+func (s *step) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
 
-	return s.mw.Handle(w, r, next)
+	return s.mw.Handle(w, r, HandlerFunc(func(http.ResponseWriter, *http.Request) (interface{}, error) {
+
+		if s.next != nil {
+			return s.next.Handle(w, r)
+		}
+
+		return nil, nil
+
+	}))
 }
 
 func (s *step) append(mw Middleware) {

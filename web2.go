@@ -77,7 +77,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 	chain := buildChain(a.Middleware)
 
-	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next Middleware) (interface{}, error) {
+	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
 		reqHandler := reflect.New(T).Interface().(RequestHandler)
 
 		//read params
@@ -117,7 +117,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 		// if the input is valid - validete security
 		if err == nil {
-			resp.ResponseObject, err = chain.Handle(w, r, chain.next)
+			resp.ResponseObject, err = chain.Handle(w, r)
 		}
 
 		et := time.Now()
