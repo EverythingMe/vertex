@@ -4,14 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strings"
-	"time"
 
 	"gitlab.doit9.com/backend/cards/Godeps/_workspace/src/github.com/dvirsky/schema"
 
 	"github.com/dvirsky/go-pylog/logging"
-	"github.com/julienschmidt/httprouter"
 )
 
 // This wraps every response object, with an error code and processing time info.
@@ -20,6 +17,7 @@ type Response struct {
 	ErrorString    string      `json:"errorString"`
 	ErrorCode      int         `json:"errorCode"`
 	ProcessingTime float64     `json:"processingTime"`
+	RequestId      string      `json"requestId"`
 	ResponseObject interface{} `json:"response,omitempty"`
 }
 
@@ -32,8 +30,24 @@ type RequestHandler interface {
 	Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
 }
 
+type HandlerFunc func(http.ResponseWriter, *http.Request) (interface{}, error)
+
+func (h HandlerFunc) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+	return h(w, r)
+}
+
 type SecurityScheme interface {
 	Validate(r *http.Request) error
+}
+
+type Renderer interface {
+	Render(*Response, http.ResponseWriter, *http.Request) error
+}
+
+type RenderFunc func(*Response, http.ResponseWriter, *http.Request) error
+
+func (f RenderFunc) Render(res *Response, w http.ResponseWriter, r *http.Request) error {
+	return f(res, w, r)
 }
 
 type MethodFlag int
@@ -53,126 +67,6 @@ type Route struct {
 }
 
 type RouteMap map[string]Route
-
-type API struct {
-	Name                  string
-	Version               string
-	DefaultSecurityScheme SecurityScheme
-	Routes                RouteMap
-	Middleware            []Middleware
-}
-
-func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-
-	T := reflect.TypeOf(route.Handler)
-	if T.Kind() == reflect.Ptr {
-		T = T.Elem()
-	}
-	validator := NewRequestValidator(T)
-
-	security := route.Security
-	if security == nil {
-		security = a.DefaultSecurityScheme
-	}
-
-	chain := buildChain(a.Middleware)
-
-	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
-		reqHandler := reflect.New(T).Interface().(RequestHandler)
-
-		//read params
-		if err := parseInput(r, reqHandler); err != nil {
-			logging.Error("Error reading input: %s", err)
-			return nil, NewErrorCode(err.Error(), ErrInvalidInput)
-		}
-
-		if err := validator.Validate(reqHandler, r); err != nil {
-			logging.Error("Error validating http.Request!: %s", err)
-			return nil, NewErrorCode(err.Error(), ErrInvalidInput)
-
-		}
-
-		return reqHandler.Handle(w, r)
-	})
-
-	if chain == nil {
-		chain = &step{
-			mw: handlerMW,
-		}
-	} else {
-		chain.append(handlerMW)
-	}
-
-	handlerFunc := func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		//create a response object
-		resp := &Response{
-			ErrorString:    "OK",
-			ErrorCode:      1,
-			ResponseObject: nil,
-		}
-
-		//sample processing time
-		st := time.Now()
-		var err error
-
-		// if the input is valid - validete security
-		if err == nil {
-			resp.ResponseObject, err = chain.Handle(w, r)
-		}
-
-		et := time.Now()
-		resp.ProcessingTime = float64(et.Sub(st)) / float64(time.Millisecond)
-
-		//handle errors if needed
-		if err != nil {
-
-			switch e := err.(type) {
-			//handle a "proper" internal API error
-			case *Error:
-				resp.ErrorCode = e.Code
-				resp.ErrorString = e.Message
-			default:
-				resp.ErrorCode = -1
-				resp.ErrorString = err.Error()
-			}
-		}
-
-		if err = writeResonse(w, resp, FormValueDefault(r, "callback", "")); err != nil {
-
-			WriteError(w, "Error sending response", FormValueDefault(r, "callback", ""))
-		}
-
-	}
-
-	return handlerFunc
-}
-
-func (a *API) Run(addr string) error {
-	root := fmt.Sprintf("/%s/%s", a.Name, a.Version)
-
-	router := httprouter.New()
-
-	for path, route := range a.Routes {
-
-		h := a.handler(route)
-
-		path = fmt.Sprintf("%s/%s", root, strings.TrimLeft(path, "/"))
-
-		if route.Methods&GET == GET {
-			logging.Info("Registering GET handler %v to path %s", h, path)
-			router.Handle("GET", path, h)
-		}
-		if route.Methods&POST == POST {
-			logging.Info("Registering POST handler %v to path %s", h, path)
-			router.Handle("POST", path, h)
-
-		}
-
-	}
-
-	return http.ListenAndServe(addr, router)
-
-}
 
 type UserHandler struct {
 }

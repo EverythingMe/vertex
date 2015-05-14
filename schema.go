@@ -1,85 +1,39 @@
 package web2
 
 import (
-	"fmt"
 	"reflect"
+
+	"gitlab.doit9.com/backend/web2/swagger"
 )
 
-type requestDescriptor struct {
-	handlerType reflect.Type
-	Path        string
-}
-
-var requests = []requestDescriptor{}
-
-// Info about a request parameter from its struct tags
-type ParamInfo struct {
-	Name      string
-	Doc       string
-	Type      string
-	Default   string
-	Inherited bool
-	Required  bool
-	Visible   bool
-}
-
-//info about a request
-type RequestInfo struct {
-	Path   string
-	Doc    string
-	Params []ParamInfo
-}
-
-const K_DOC = "api.doc"
-const K_DEFAULT = "api.default"
-const K_MIN = "api.min"
-const K_MAX = "api.max"
-const K_MAXLEN = "api.maxlen"
-const K_MINLEN = "api.minlen"
-const K_HIDDEN = "api.hidden"
-const K_REQUIRED = "api.required"
-
-// describe a request param from its field info
-func describeParam(field reflect.StructField, inherited bool) ParamInfo {
-
-	ret := ParamInfo{Name: field.Name}
-
-	//allow schema overrides of fields
-	schemaName := field.Tag.Get("schema")
-	if schemaName != "" {
-		ret.Name = schemaName
-	}
-
-	ret.Doc = field.Tag.Get(K_DOC)
-
-	ret.Default = field.Tag.Get(K_DEFAULT)
-	ret.Type = field.Type.Kind().String()
-	ret.Inherited = inherited
-	ret.Visible = field.Tag.Get(K_HIDDEN) != "true"
-
-	ret.Required = field.Tag.Get(K_REQUIRED) == "true" || field.Tag.Get(K_REQUIRED) == "1"
-	fmt.Println(ret)
-	return ret
-}
+const K_DOC = swagger.DocTag
+const K_DEFAULT = swagger.DefaultTag
+const K_MIN = swagger.MinTag
+const K_MAX = swagger.MaxTag
+const K_MAXLEN = swagger.MaxLenTag
+const K_MINLEN = swagger.MinLenTag
+const K_HIDDEN = swagger.HiddenTag
+const K_REQUIRED = swagger.RequiredTag
 
 // recrusively describe a struct's field using our custom struct tags.
 // This is recursive to allow embedding
-func describeStructFields(T reflect.Type, inherited bool) (ret []ParamInfo) {
-	ret = make([]ParamInfo, 0)
+func describeStructFields(T reflect.Type) (ret []swagger.Param) {
+
+	ret = make([]swagger.Param, 0, T.NumField())
 
 	for i := 0; i < T.NumField(); i++ {
 
 		field := T.FieldByIndex([]int{i})
-
 		if field.Name == "_" {
 			continue
 		}
 
+		// a struct means this is an embedded request object
 		if field.Type.Kind() == reflect.Struct {
-			ret = append(describeStructFields(field.Type, true), ret...)
+			ret = append(describeStructFields(field.Type), ret...)
 		} else {
 
-			ret = append(ret, describeParam(field, inherited))
+			ret = append(ret, swagger.ParamFromField(field))
 
 		}
 
@@ -90,38 +44,34 @@ func describeStructFields(T reflect.Type, inherited bool) (ret []ParamInfo) {
 }
 
 //describe the API for a request
-func describeRequest(desc requestDescriptor) RequestInfo {
+func (r Route) toSwagger() swagger.Method {
 
-	ret := RequestInfo{
-		Path: desc.Path,
-	}
-
-	ret.Params = describeStructFields(desc.handlerType, false)
-
-	j := len(ret.Params) - 1
-	for i, _ := range ret.Params {
-
-		ret.Params[i], ret.Params[j-i] = ret.Params[j-i], ret.Params[i]
-		if i > j/2 {
-			break
-
-		}
-	}
-
-	field, found := desc.handlerType.FieldByName("_")
-	if found {
-		ret.Doc = field.Tag.Get(K_DOC)
+	ret := swagger.Method{
+		Description: r.Description,
+		Parameters:  describeStructFields(reflect.TypeOf(r.Handler)),
+		Responses: map[string]swagger.Response{
+			"default": {"", swagger.Schema{}},
+		},
 	}
 
 	return ret
 }
 
 // Return info on all the request
-func DescribeRequests() []RequestInfo {
+func (a API) describe() *swagger.API {
 
-	ret := make([]RequestInfo, 0)
-	for _, req := range requests {
-		ret = append(ret, describeRequest(req))
+	ret := swagger.NewAPI(a.Host, a.Title, a.Version, a.Doc, a.abspath(""))
+
+	for path, route := range a.Routes {
+		p := ret.AddPath(path)
+		method := route.toSwagger()
+
+		if route.Methods&POST == POST {
+			p["post"] = method
+		}
+		if route.Methods&GET == GET {
+			p["get"] = method
+		}
 	}
 
 	return ret
