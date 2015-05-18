@@ -37,8 +37,8 @@ const (
 	InTag         = "in"
 )
 
-func TypeOf(t reflect.Type) Type {
-	switch t.Kind() {
+func TypeOf(t reflect.Kind) Type {
+	switch t {
 	case reflect.Bool:
 		return Boolean
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64,
@@ -162,7 +162,7 @@ func ParamFromField(field reflect.StructField) Param {
 	ret.In = getTag(field, InTag, "query")
 	ret.Description = field.Tag.Get(DocTag)
 	ret.Default = field.Tag.Get(DefaultTag)
-	ret.Type = TypeOf(field.Type)
+	ret.Type = TypeOf(field.Type.Kind())
 	ret.Required = boolTag(field, RequiredTag, false)
 	ret.Pattern = field.Tag.Get(PatternTag)
 

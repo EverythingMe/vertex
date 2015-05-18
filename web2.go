@@ -58,22 +58,7 @@ const (
 	PUT  MethodFlag = 0x03
 )
 
-type Route struct {
-	Description string
-	Handler     RequestHandler
-	Methods     MethodFlag
-	Security    SecurityScheme
-	Middleware  []Middleware
-}
-
 type RouteMap map[string]Route
-
-type UserHandler struct {
-}
-
-func (u UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-	return nil, nil
-}
 
 var schemaDecoder = schema.NewDecoder()
 

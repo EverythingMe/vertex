@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 )
 
+// API represents the definition of a single, versioned API and all its routes, middleware and handlers
 type API struct {
 	Name                  string
 	Title                 string
@@ -24,8 +26,10 @@ type API struct {
 	Middleware            []Middleware
 }
 
+// return an httprouter compliant handler function for a route
 func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
+	// extract the handler type to create a reflect based factory for it
 	T := reflect.TypeOf(route.Handler)
 	if T.Kind() == reflect.Ptr {
 		T = T.Elem()
@@ -37,9 +41,14 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		security = a.DefaultSecurityScheme
 	}
 
+	// Build the middleware chain for the API middleware and the rout middleware.
+	// The route middleware comes after the API middleware
 	chain := buildChain(append(a.Middleware, route.Middleware...))
 
+	// add the handler itself as the final middleware
 	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+
+		// create a new request handler instance
 		reqHandler := reflect.New(T).Interface().(RequestHandler)
 
 		//read params
@@ -48,6 +57,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 			return nil, NewErrorCode(err.Error(), ErrInvalidInput)
 		}
 
+		// Validate the input based on the API spec
 		if err := validator.Validate(reqHandler, r); err != nil {
 			logging.Error("Error validating http.Request!: %s", err)
 			return nil, NewErrorCode(err.Error(), ErrInvalidInput)
@@ -74,6 +84,13 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 		//sample processing time
 		st := time.Now()
+
+		r.ParseForm()
+
+		// Copy values from the router params to the request params
+		for _, v := range p {
+			r.Form.Set(v.Key, v.Value)
+		}
 
 		ret, err := chain.handle(w, r)
 
@@ -102,8 +119,13 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 }
 
+var routeRe = regexp.MustCompile("\\{([a-zA-Z_\\.0-9]+)\\}")
+
 func (a *API) abspath(relpath string) string {
 
+	fmt.Println(relpath)
+	relpath = routeRe.ReplaceAllString(relpath, ":$1")
+	fmt.Println(relpath)
 	return strings.TrimRight(fmt.Sprintf("/%s/%s/%s", a.Name, a.Version, strings.TrimLeft(relpath, "/")), "/")
 }
 
@@ -160,5 +182,26 @@ func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httpr
 
 		//		t.Execute(w, &apiDesc)
 	}
+
+}
+
+// Return info on all the request
+func (a API) describe() *swagger.API {
+
+	ret := swagger.NewAPI(a.Host, a.Title, a.Version, a.Doc, a.abspath(""))
+
+	for path, route := range a.Routes {
+		p := ret.AddPath(path)
+		method := route.toSwagger()
+
+		if route.Methods&POST == POST {
+			p["post"] = method
+		}
+		if route.Methods&GET == GET {
+			p["get"] = method
+		}
+	}
+
+	return ret
 
 }

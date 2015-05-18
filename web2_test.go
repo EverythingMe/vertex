@@ -26,7 +26,7 @@ type UserHandler struct {
 
 func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
 
-	return fmt.Sprintf("Your name is %s", h.Name), nil
+	return fmt.Sprintf("Your name is %s and id is %s", h.Name, h.Id), nil
 }
 
 var loggingMW = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next web2.HandlerFunc) (interface{}, error) {
