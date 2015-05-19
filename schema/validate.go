@@ -21,7 +21,6 @@ type validator interface {
 // Base param validator
 type fieldValidator struct {
 	ParamInfo
-	Key string
 }
 
 func newValidationError(msg string, args ...interface{}) error {
@@ -34,7 +33,7 @@ func (v *fieldValidator) Validate(field reflect.Value, r *http.Request) error {
 	if v.Required {
 
 		if r.FormValue(v.Name) == "" || !field.IsValid() {
-			return newValidationError("missing required param %s", v.Key)
+			return newValidationError("missing required param %s", v.StructKey)
 		}
 
 	}
@@ -43,7 +42,7 @@ func (v *fieldValidator) Validate(field reflect.Value, r *http.Request) error {
 }
 
 func (v *fieldValidator) GetKey() string {
-	return v.Key
+	return v.StructKey
 }
 
 func (v *fieldValidator) GetParamName() string {
@@ -66,7 +65,6 @@ func (v *fieldValidator) GetDefault() (interface{}, bool) {
 func newFieldValidator(pi ParamInfo) *fieldValidator {
 	ret := &fieldValidator{
 		ParamInfo: pi,
-		Key:       pi.Name,
 	}
 
 	return ret
@@ -229,6 +227,7 @@ func (rv *RequestValidator) Validate(request interface{}, r *http.Request) error
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
 	}
+
 	//go over all the validators
 	for _, v := range rv.fieldValidators {
 

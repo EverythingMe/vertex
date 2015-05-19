@@ -26,6 +26,9 @@ const (
 
 // ParamInfo represents metadata about a requests parameter
 type ParamInfo struct {
+	// the struct name of the param
+	StructKey string
+
 	// The request name of the parameter, case sensitive
 	Name string
 
@@ -126,7 +129,7 @@ func intTag(f reflect.StructField, tag string, deflt int) (int, bool) {
 
 func newParamInfo(field reflect.StructField) ParamInfo {
 
-	ret := ParamInfo{Name: field.Name}
+	ret := ParamInfo{Name: field.Name, StructKey: field.Name}
 
 	//allow schema overrides of fields
 	schemaName := field.Tag.Get("schema")
