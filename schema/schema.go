@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -23,23 +24,53 @@ const (
 	InTag         = "in"
 )
 
+// ParamInfo represents metadata about a requests parameter
 type ParamInfo struct {
-	Name        string
+	// The request name of the parameter, case sensitive
+	Name string
+
+	// Documentation description
 	Description string
-	Required    bool
-	Type        reflect.Kind
-	Format      string
-	Default     interface{}
-	HasDefault  bool
-	Max         float64
-	HasMax      bool
-	Min         float64
-	HasMin      bool
-	MaxLength   int
-	MinLength   int
-	Pattern     string
-	Options     []string
-	In          string
+
+	// Is this param required or optional
+	Required bool
+
+	// The param's type as a reflect.Kind. We allow string,int,float,bool,slice
+	Type reflect.Kind
+
+	// extra format info for swagger compliance. see https://github.com/swagger-api/swagger-spec/blob/master/versions/1.2.md#431-primitives
+	Format string
+
+	// Default value, parsed from string based on the param type
+	Default interface{}
+
+	// did we have a default value? the default may legitimately be nil or empty or 0
+	HasDefault bool
+
+	// Max for numbers
+	Max float64
+	// Did we have a max definition
+	HasMax bool
+
+	// Min for numbers
+	Min float64
+	//did we have a min definition?
+	HasMin bool
+
+	// Maxlength for strings. irrelevant if 0
+	MaxLength int
+
+	// Minlength for strings. irrelevant if 0
+	MinLength int
+
+	// Regex pattern match. TODO: add to the validator logic
+	Pattern string
+
+	// One-of string selection
+	Options []string
+
+	// Where is the param in. empty is query/body. should be set only to "path" in case of path params
+	In string
 }
 
 func getTag(f reflect.StructField, key, def string) string {
@@ -93,10 +124,6 @@ func intTag(f reflect.StructField, tag string, deflt int) (int, bool) {
 
 }
 
-func parseDefault(val string, t reflect.Kind) (interface{}, bool) {
-	return nil, false
-}
-
 func newParamInfo(field reflect.StructField) ParamInfo {
 
 	ret := ParamInfo{Name: field.Name}
@@ -124,14 +151,16 @@ func newParamInfo(field reflect.StructField) ParamInfo {
 	return ret
 }
 
+// RequestInfo represents a single request's descriptor
 type RequestInfo struct {
-	Path   string
-	Params []ParamInfo
+	Path        string
+	Description string
+	Params      []ParamInfo
 }
 
 // recrusively describe a struct's field using our custom struct tags.
 // This is recursive to allow embedding
-func describeStructFields(T reflect.Type) (ret []ParamInfo) {
+func extractParams(T reflect.Type) (ret []ParamInfo) {
 
 	ret = make([]ParamInfo, 0, T.NumField())
 
@@ -144,7 +173,7 @@ func describeStructFields(T reflect.Type) (ret []ParamInfo) {
 
 		// a struct means this is an embedded request object
 		if field.Type.Kind() == reflect.Struct {
-			ret = append(describeStructFields(field.Type), ret...)
+			ret = append(extractParams(field.Type), ret...)
 		} else {
 
 			ret = append(ret, newParamInfo(field))
@@ -154,5 +183,40 @@ func describeStructFields(T reflect.Type) (ret []ParamInfo) {
 	}
 
 	return
+
+}
+
+// NewRequestInfo Builds a requestInfo from a requestHandler struct using reflection
+func NewRequestInfo(T reflect.Type, path string, description string) (RequestInfo, error) {
+
+	if T.Kind() == reflect.Ptr {
+		T = T.Elem()
+	}
+
+	if T.Kind() != reflect.Struct {
+		return RequestInfo{}, fmt.Errorf("Could not extract request info from non struct type")
+	}
+
+	ret := RequestInfo{Path: path, Description: description, Params: make([]ParamInfo, 0)}
+
+	for i := 0; i < T.NumField(); i++ {
+
+		field := T.FieldByIndex([]int{i})
+		if field.Name == "_" {
+			continue
+		}
+
+		// a struct means this is an embedded request object
+		if field.Type.Kind() == reflect.Struct {
+			ret.Params = append(extractParams(field.Type), ret.Params...)
+		} else {
+
+			ret.Params = append(ret.Params, newParamInfo(field))
+
+		}
+
+	}
+
+	return ret, nil
 
 }
