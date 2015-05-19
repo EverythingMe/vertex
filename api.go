@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
+
+	"gitlab.doit9.com/backend/web2/schema"
+	"gitlab.doit9.com/backend/web2/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
 	"github.com/julienschmidt/httprouter"
@@ -24,6 +28,8 @@ type API struct {
 	Renderer              Renderer
 	Routes                RouteMap
 	Middleware            []Middleware
+	Tests                 []Tester
+	AllowInsecure         bool
 }
 
 // return an httprouter compliant handler function for a route
@@ -34,7 +40,8 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 	if T.Kind() == reflect.Ptr {
 		T = T.Elem()
 	}
-	validator := NewRequestValidator(T)
+
+	validator := schema.NewRequestValidator(route.requestInfo)
 
 	security := route.Security
 	if security == nil {
@@ -54,13 +61,13 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		//read params
 		if err := parseInput(r, reqHandler); err != nil {
 			logging.Error("Error reading input: %s", err)
-			return nil, NewErrorCode(err.Error(), ErrInvalidInput)
+			return nil, NewErrorCode(err.Error(), InvalidRequest)
 		}
 
 		// Validate the input based on the API spec
 		if err := validator.Validate(reqHandler, r); err != nil {
 			logging.Error("Error validating http.Request!: %s", err)
-			return nil, NewErrorCode(err.Error(), ErrInvalidInput)
+			return nil, NewErrorCode(err.Error(), InvalidRequest)
 
 		}
 
@@ -121,23 +128,41 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 var routeRe = regexp.MustCompile("\\{([a-zA-Z_\\.0-9]+)\\}")
 
-func (a *API) abspath(relpath string) string {
+// FullPath returns the calculated full versioned path inside the API of a request.
+//
+// e.g. if my API name is "myapi" and the version is 1.0, FullPath("/foo") returns "/myapi/1.0/foo"
+func (a *API) FullPath(relpath string) string {
 
-	fmt.Println(relpath)
 	relpath = routeRe.ReplaceAllString(relpath, ":$1")
-	fmt.Println(relpath)
-	return strings.TrimRight(fmt.Sprintf("/%s/%s/%s", a.Name, a.Version, strings.TrimLeft(relpath, "/")), "/")
+
+	ret := strings.TrimRight(fmt.Sprintf("/%s/%s/%s", a.Name, a.Version, strings.TrimLeft(relpath, "/")), "/")
+	logging.Debug("FullPath for %s => %s", relpath, ret)
+	return ret
 }
 
-func (a *API) Run(addr string) error {
+// Run runs a single API server
 
-	router := httprouter.New()
+func (a *API) Run(addr string) error {
+	router := a.configure(nil)
+	// Server the console swagger UI
+	router.ServeFiles("/console/*filepath", http.Dir("./console"))
+
+	// Add a listener for integration tests
+	router.Handle("GET", fmt.Sprintf("/test/%s/%s/:category", a.Name, a.Version), a.testHandler(addr))
+	return http.ListenAndServe(addr, router)
+}
+
+func (a *API) configure(router *httprouter.Router) *httprouter.Router {
+	if router == nil {
+		router = httprouter.New()
+	}
 
 	for path, route := range a.Routes {
-
+		route.parseInfo(path)
+		a.Routes[path] = route
 		h := a.handler(route)
 
-		path = a.abspath(path)
+		path = a.FullPath(path)
 
 		if route.Methods&GET == GET {
 			logging.Info("Registering GET handler %v to path %s", h, path)
@@ -151,22 +176,23 @@ func (a *API) Run(addr string) error {
 
 	}
 
-	router.GET(a.abspath("/docs"), a.docsHandler())
+	// Server the API documentation swagger
+	router.GET(a.FullPath("/swagger"), a.docsHandler())
 
-	router.ServeFiles("/console/*filepath", http.Dir("./console"))
+	// Redirect /$api/$version/console => /console?url=/$api/$version/swagger
+	uiPath := fmt.Sprintf("/console?url=%s", url.QueryEscape(a.FullPath("/swagger")))
+	router.Handler("GET", a.FullPath("/console"), http.RedirectHandler(uiPath, 301))
 
-	return http.ListenAndServe(addr, router)
+	return router
 
 }
 
 func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
+	apiDesc := a.ToSwagger()
+
 	// A hander that generates html documentation of the API. Bind it to a url explicitly
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-
-		apiDesc := a.describe()
-		apiDesc.Consumes = []string{"text/json"}
-		apiDesc.Produces = apiDesc.Consumes
 
 		b, _ := json.MarshalIndent(apiDesc, "", "  ")
 
@@ -185,14 +211,42 @@ func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httpr
 
 }
 
+func (a *API) testHandler(addr string) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+		w.Header().Set("Content-Type", "text/plain")
+		category := p.ByName("category")
+
+		runner := newTestRunner(w, a, addr, category)
+
+		err := runner.Run(a.Tests)
+		if err != nil {
+			w.Write([]byte("TESTS FAILED\r\n"))
+		}
+
+	}
+}
+
 // Return info on all the request
-func (a API) describe() *swagger.API {
+func (a API) ToSwagger() *swagger.API {
 
-	ret := swagger.NewAPI(a.Host, a.Title, a.Version, a.Doc, a.abspath(""))
+	schemes := []string{"https"}
 
+	// http first is important for the swagger ui
+	if a.AllowInsecure {
+		schemes = []string{"http", "https"}
+	}
+	ret := swagger.NewAPI(a.Host, a.Title, a.Version, a.Doc, a.FullPath(""), schemes)
+	ret.Consumes = []string{"text/json"}
+	ret.Produces = a.Renderer.ContentTypes()
 	for path, route := range a.Routes {
+
+		ri := route.requestInfo
+
 		p := ret.AddPath(path)
-		method := route.toSwagger()
+		method := ri.ToSwagger()
+		fmt.Printf("%#v\n", ri)
 
 		if route.Methods&POST == POST {
 			p["post"] = method
@@ -203,5 +257,4 @@ func (a API) describe() *swagger.API {
 	}
 
 	return ret
-
 }

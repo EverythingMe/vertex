@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 
 	"gitlab.doit9.com/backend/web2"
 	"gitlab.doit9.com/backend/web2/middleware"
+	"gitlab.doit9.com/backend/web2/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
 )
@@ -33,6 +36,23 @@ var loggingMW = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request,
 	logging.Info("Logging request %s", r.URL.String())
 	return next(w, r)
 })
+
+func testUserHandler(t *web2.TestContext) error {
+
+	req, err := t.NewRequest("GET", "/user/foo?name=bar", nil)
+	if err != nil {
+		return err
+	}
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	res.Body.Close()
+
+	return nil
+
+}
 
 func TestMiddleware(t *testing.T) {
 
@@ -60,14 +80,15 @@ func TestAPI(t *testing.T) {
 
 	//t.SkipNow()
 
-	a := web2.API{
-		Host:       "localhost:9947",
-		Name:       "testung",
-		Version:    "1.0",
-		Doc:        "Our fancy testung API",
-		Title:      "Testung API!",
-		Middleware: middleware.DefaultMiddleware,
-		Renderer:   web2.RenderJSON,
+	a := &web2.API{
+		Host:          "localhost:9947",
+		Name:          "testung",
+		Version:       "1.0",
+		Doc:           "Our fancy testung API",
+		Title:         "Testung API!",
+		Middleware:    middleware.DefaultMiddleware,
+		Renderer:      web2.RenderJSON,
+		AllowInsecure: true,
 		Routes: web2.RouteMap{
 			"/user/{id}": {
 				Description: "Get User Info by id or name",
@@ -75,10 +96,43 @@ func TestAPI(t *testing.T) {
 				Methods:     web2.GET,
 			},
 		},
+		Tests: []web2.Tester{
+			web2.TestFunc("TestUserHandler", "critical", testUserHandler),
+		},
 	}
 
-	if err := a.Run(":9947"); err != nil {
-		t.Fatal(err)
+	srv := web2.NewServer(":9947")
+	srv.AddAPI(a)
+
+	//	if err := srv.Run(); err != nil {
+	//		t.Fatal(err)
+	//	}
+
+	s := httptest.NewServer(srv.Handler())
+	defer s.Close()
+
+	u := fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), a.FullPath("/swagger"))
+	t.Log(u)
+
+	res, err := http.Get(u)
+	if err != nil {
+		t.Errorf("Could not get swagger data")
 	}
+
+	defer res.Body.Close()
+	//	b, err := ioutil.ReadAll(res.Body)
+	//	fmt.Println(string(b))
+	var sw swagger.API
+	dec := json.NewDecoder(res.Body)
+	if err = dec.Decode(&sw); err != nil {
+		t.Errorf("Could not decode swagger def: %s", err)
+	}
+
+	swexp := a.ToSwagger()
+
+	if !reflect.DeepEqual(sw, *swexp) {
+		t.Errorf("Unmatching api descs:\n%#v\n%#v", sw, *swexp)
+	}
+	//fmt.Println(sw)
 
 }

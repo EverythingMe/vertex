@@ -1,7 +1,6 @@
 package web2
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -21,44 +20,73 @@ type Response struct {
 	ResponseObject interface{} `json:"response,omitempty"`
 }
 
-type Request struct {
-	*http.Request
-	context map[string]interface{}
-}
-
+// RequestHandler is the interface that request handler structs should implement.
+//
+// The idea is that you define your request parameters as struct fields, and they get mapped automatically
+// and validated, leaving you with just pure logic work.
+//
+// An example Request handler:
+//
+//	type UserHandler struct {
+//		Id   string `schema:"id" required:"true" doc:"The Id Of the user" maxlen:"20" in:"path"`
+//		Name string `schema:"name" maxlen:"100" required:"true" doc:"The Name Of the user"`
+//      Admin bool `schema:"bool" default:"true" required:"false" doc:"Is this user an admin"`
+//	}
+//
+//	func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+//		return fmt.Sprintf("Your name is %s and id is %s", h.Name, h.Id), nil
+//	}
+//
+// Supported types for automatic param mapping: string, int(32/64), float(32/64), bool, []string
 type RequestHandler interface {
 	Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
 }
 
+// HandlerFunc is an adapter that allows you to register normal functions as handlers. It is used mainly by middleware
+// and should not be used in an application context
 type HandlerFunc func(http.ResponseWriter, *http.Request) (interface{}, error)
 
+// Handle calls the underlying function
 func (h HandlerFunc) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
 	return h(w, r)
 }
 
+func StaticHanlder(dir http.Dir) RequestHandler {
+
+	h := http.FileServer(dir)
+	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+
+		h.ServeHTTP(w, r)
+		return nil, ErrHijacked
+
+	})
+}
+
+func StaticText(message string) RequestHandler {
+
+	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintln(w, message)
+		return nil, ErrHijacked
+
+	})
+}
+
+// SecurityScheme is a special interface that validates a request and is outside the middleware chain.
+// An API has a default security scheme, and each route can override it
 type SecurityScheme interface {
 	Validate(r *http.Request) error
 }
 
-type Renderer interface {
-	Render(*Response, http.ResponseWriter, *http.Request) error
-}
-
-type RenderFunc func(*Response, http.ResponseWriter, *http.Request) error
-
-func (f RenderFunc) Render(res *Response, w http.ResponseWriter, r *http.Request) error {
-	return f(res, w, r)
-}
-
+// Flags for method handling on API declaration
 type MethodFlag int
 
+// Method flag definitions
 const (
 	GET  MethodFlag = 0x01
 	POST MethodFlag = 0x02
 	PUT  MethodFlag = 0x03
 )
-
-type RouteMap map[string]Route
 
 var schemaDecoder = schema.NewDecoder()
 
@@ -68,7 +96,7 @@ func parseInput(r *http.Request, input interface{}) error {
 	err := r.ParseForm()
 
 	if err != nil {
-		return NewErrorCode(err.Error(), ErrInvalidInput)
+		return NewErrorCode(err.Error(), InvalidRequest)
 	}
 
 	// r.PostForm is a map of our POST form values
@@ -76,34 +104,11 @@ func parseInput(r *http.Request, input interface{}) error {
 
 	if err != nil {
 		logging.Error("Error decoding input: %s", err)
-		return NewErrorCode(err.Error(), ErrInvalidInput)
+		return NewErrorCode(err.Error(), InvalidRequest)
 	}
 
 	return nil
 
-}
-
-//serialize a response object to JSON
-func writeResonse(w http.ResponseWriter, resp *Response, callback string) error {
-
-	buf, e := json.Marshal(resp)
-	if e == nil {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		if callback != "" {
-			w.Write([]byte(fmt.Sprintf("%s(", callback)))
-		}
-
-		w.Write(buf)
-
-		if callback != "" {
-			w.Write([]byte(");"))
-		}
-
-		return nil
-	}
-
-	return e
 }
 
 // Get the value from  a form param, with an optional default argument if the value was not set
@@ -113,40 +118,4 @@ func FormValueDefault(r *http.Request, key, def string) string {
 		return def
 	}
 	return strings.Replace(ret, "\"", "", -1)
-}
-
-//serialize an error string inside an object
-func WriteError(w http.ResponseWriter, message string, callback string) {
-
-	//WriteError is called from recovery, so it must be panic proof
-	defer func() {
-		e := recover()
-		if e != nil {
-			logging.Error("Could not write error response! %s", e)
-		}
-	}()
-
-	response := Response{
-		ErrorCode:   -1,
-		ErrorString: message,
-	}
-
-	buf, e := json.Marshal(response)
-	if e == nil {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		if callback != "" {
-			w.Write([]byte(fmt.Sprintf("%s(", callback)))
-		}
-
-		w.Write(buf)
-		if callback != "" {
-			w.Write([]byte(");"))
-		}
-
-	} else {
-		logging.Error("Could not marshal response object: %s", e)
-		w.Write([]byte("Error sending response!"))
-	}
-
 }

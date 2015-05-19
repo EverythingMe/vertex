@@ -1,12 +1,6 @@
 package swagger
 
-import (
-	"reflect"
-	"strconv"
-	"strings"
-
-	"github.com/dvirsky/go-pylog/logging"
-)
+import "reflect"
 
 const SwaggerVersion = "2.0"
 
@@ -20,21 +14,6 @@ const (
 	Integer Type = "integer"
 	Array   Type = "array"
 	Object  Type = "object"
-)
-
-// Struct field definitions
-const (
-	DocTag        = "doc"
-	DefaultTag    = "default"
-	MinTag        = "min"
-	MaxTag        = "max"
-	MaxLenTag     = "maxlen"
-	MinLenTag     = "minlen"
-	HiddenTag     = "hidden"
-	RequiredTag   = "required"
-	AllowEmptyTag = "allowEmpty"
-	PatternTag    = "pattern"
-	InTag         = "in"
 )
 
 func TypeOf(t reflect.Kind) Type {
@@ -98,82 +77,6 @@ type Param struct {
 	In        string   `json:"in"`
 }
 
-func getTag(f reflect.StructField, key, def string) string {
-	ret := f.Tag.Get(key)
-	if ret == "" {
-		return def
-	}
-	return ret
-}
-
-func boolTag(f reflect.StructField, tag string, deflt bool) bool {
-	t := f.Tag.Get(tag)
-	if t == "" {
-		return deflt
-	}
-	return t == "1" || strings.ToLower(t) == "true"
-}
-
-func floatTag(f reflect.StructField, tag string, deflt float64) (float64, bool) {
-
-	var err error
-	var ret float64
-
-	v := f.Tag.Get(tag)
-	if v == "" {
-		return deflt, false
-	}
-
-	if ret, err = strconv.ParseFloat(v, 64); err != nil {
-		logging.Panic("Invalid value for float: %s", v)
-	}
-
-	return ret, true
-
-}
-
-func intTag(f reflect.StructField, tag string, deflt int) (int, bool) {
-
-	var err error
-	var ret int64
-
-	v := f.Tag.Get(tag)
-	if v == "" {
-		return deflt, false
-	}
-
-	if ret, err = strconv.ParseInt(v, 10, 64); err != nil {
-		logging.Panic("Invalid value for int: %s", v)
-	}
-	return int(ret), true
-
-}
-
-func ParamFromField(field reflect.StructField) Param {
-
-	ret := Param{Name: field.Name}
-
-	//allow schema overrides of fields
-	schemaName := field.Tag.Get("schema")
-	if schemaName != "" {
-		ret.Name = schemaName
-	}
-
-	ret.In = getTag(field, InTag, "query")
-	ret.Description = field.Tag.Get(DocTag)
-	ret.Default = field.Tag.Get(DefaultTag)
-	ret.Type = TypeOf(field.Type.Kind())
-	ret.Required = boolTag(field, RequiredTag, false)
-	ret.Pattern = field.Tag.Get(PatternTag)
-
-	ret.Min, ret.HasMin = floatTag(field, MinTag, 0)
-	ret.Max, ret.HasMax = floatTag(field, MaxTag, 0)
-	ret.MaxLength, _ = intTag(field, MaxLenTag, 0)
-	ret.MinLength, _ = intTag(field, MinLenTag, 0)
-
-	return ret
-}
-
 // Schema is a generic jsonschema definition - TBD how we want to represent it
 type Schema map[string]interface{}
 
@@ -207,7 +110,7 @@ type API struct {
 	Definitions    map[string]Schema `json:"definitions,omitempty"`
 }
 
-func NewAPI(host, title, description, version, basePath string) *API {
+func NewAPI(host, title, description, version, basePath string, schemes []string) *API {
 	return &API{
 		Info: Info{
 			Version:     version,
@@ -218,7 +121,7 @@ func NewAPI(host, title, description, version, basePath string) *API {
 		Basepath:       basePath,
 		SwaggerVersion: SwaggerVersion,
 		Paths:          make(map[string]Path),
-		Schemes:        []string{"http"},
+		Schemes:        schemes,
 	}
 }
 

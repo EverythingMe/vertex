@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 
+	"gitlab.doit9.com/backend/web2/swagger"
+
 	"github.com/dvirsky/go-pylog/logging"
 )
 
@@ -46,6 +48,9 @@ type ParamInfo struct {
 
 	// Default value, parsed from string based on the param type
 	Default interface{}
+
+	// The unparsed, raw value of the default
+	RawDefault string
 
 	// did we have a default value? the default may legitimately be nil or empty or 0
 	HasDefault bool
@@ -149,6 +154,7 @@ func newParamInfo(field reflect.StructField) ParamInfo {
 	ret.MaxLength, _ = intTag(field, MaxLenTag, 0)
 	ret.MinLength, _ = intTag(field, MinLenTag, 0)
 
+	ret.RawDefault = getTag(field, DefaultTag, "")
 	ret.Default, ret.HasDefault = parseDefault(getTag(field, DefaultTag, ""), field.Type.Kind())
 
 	return ret
@@ -159,6 +165,21 @@ type RequestInfo struct {
 	Path        string
 	Description string
 	Params      []ParamInfo
+}
+
+func (r RequestInfo) ToSwagger() swagger.Method {
+	ret := swagger.Method{
+		Description: r.Description,
+		Responses: map[string]swagger.Response{
+			"default": {"", swagger.Schema{}},
+		},
+		Parameters: make([]swagger.Param, 0),
+	}
+
+	for _, p := range r.Params {
+		ret.Parameters = append(ret.Parameters, p.ToSwagger())
+	}
+	return ret
 }
 
 // recrusively describe a struct's field using our custom struct tags.
@@ -222,4 +243,24 @@ func NewRequestInfo(T reflect.Type, path string, description string) (RequestInf
 
 	return ret, nil
 
+}
+
+// ToSwagger converts the paramInfo into a swagger Param - they are almost the same, but kept separate
+// for decoupling purposes
+func (p ParamInfo) ToSwagger() swagger.Param {
+	return swagger.Param{
+		Name:        p.Name,
+		Description: p.Description,
+		Type:        swagger.TypeOf(p.Type),
+		Required:    p.Required,
+		Format:      p.Format,
+		Default:     p.RawDefault,
+		Max:         p.Max,
+		Min:         p.Min,
+		MaxLength:   p.MaxLength,
+		MinLength:   p.MinLength,
+		Pattern:     p.Pattern,
+		Enum:        p.Options,
+		In:          p.In,
+	}
 }
