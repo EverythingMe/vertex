@@ -17,13 +17,13 @@ var RequestLogger = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Requ
 	return ret, err
 })
 
-func StaticText(msg string) web2.MiddlewareFunc {
+//func StaticText(msg string) web2.MiddlewareFunc {
 
-	h := http.FileServer(dir)
-	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+//	//h := http.FileServer(dir)
+//	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
 
-		h.ServeHTTP(w, r)
-		return nil, ErrHijacked
+//		fmt.Fprintln(w, msg)
+//		return nil, ErrHijacked
 
-	})
-}
+//	})
+//}

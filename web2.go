@@ -3,9 +3,11 @@ package web2
 import (
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
-	"gitlab.doit9.com/backend/cards/Godeps/_workspace/src/github.com/dvirsky/schema"
+	gorilla "github.com/gorilla/schema"
+	"gitlab.doit9.com/backend/web2/schema"
 
 	"github.com/dvirsky/go-pylog/logging"
 )
@@ -51,9 +53,22 @@ func (h HandlerFunc) Handle(w http.ResponseWriter, r *http.Request) (interface{}
 	return h(w, r)
 }
 
-func StaticHanlder(dir http.Dir) RequestHandler {
+type Params map[string]string
 
-	h := http.FileServer(dir)
+func FormatPath(path string, params Params) string {
+
+	if params != nil {
+		for k, v := range params {
+			path = strings.Replace(path, fmt.Sprintf("{%s}", k), v, -1)
+		}
+	}
+	return path
+}
+
+func StaticHanlder(root string, dir http.Dir) RequestHandler {
+
+	h := http.StripPrefix(root, http.FileServer(dir))
+
 	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
 
 		h.ServeHTTP(w, r)
@@ -61,6 +76,10 @@ func StaticHanlder(dir http.Dir) RequestHandler {
 
 	})
 }
+
+var VoidHandler = HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+	return nil, nil
+})
 
 func StaticText(message string) RequestHandler {
 
@@ -88,10 +107,11 @@ const (
 	PUT  MethodFlag = 0x03
 )
 
-var schemaDecoder = schema.NewDecoder()
+var schemaDecoder = gorilla.NewDecoder()
 
 // Parse the user input into a request handler struct, with input validation
-func parseInput(r *http.Request, input interface{}) error {
+func parseInput(r *http.Request, input interface{}, validator *schema.RequestValidator) error {
+
 	schemaDecoder.IgnoreUnknownKeys(true)
 	err := r.ParseForm()
 
@@ -99,12 +119,23 @@ func parseInput(r *http.Request, input interface{}) error {
 		return NewErrorCode(err.Error(), InvalidRequest)
 	}
 
-	// r.PostForm is a map of our POST form values
-	err = schemaDecoder.Decode(input, r.Form)
+	// We do not map and validate input to non-struct handlers
+	if reflect.TypeOf(input).Kind() == reflect.Struct {
 
-	if err != nil {
-		logging.Error("Error decoding input: %s", err)
-		return NewErrorCode(err.Error(), InvalidRequest)
+		err = schemaDecoder.Decode(input, r.Form)
+
+		if err != nil {
+			logging.Error("Error decoding input: %s", err)
+			return NewErrorCode(err.Error(), InvalidRequest)
+		}
+
+		// Validate the input based on the API spec
+		if err := validator.Validate(input, r); err != nil {
+			logging.Error("Error validating http.Request!: %s", err)
+			return NewErrorCode(err.Error(), InvalidRequest)
+
+		}
+
 	}
 
 	return nil

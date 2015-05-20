@@ -15,7 +15,8 @@ var AutoRecover = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Reques
 
 		e := recover()
 		if e != nil {
-			logging.Error("Caught panic: %v", e)
+			logging.Critical("Caught panic: %v", e)
+
 			err = fmt.Errorf("PANIC handling %s: %s", r.URL.Path, e)
 			return
 		}

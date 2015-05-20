@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"path"
 
 	"github.com/julienschmidt/httprouter"
 )
@@ -28,9 +29,12 @@ func NewServer(addr string) *Server {
 func (s *Server) AddAPI(a *API) {
 	a.configure(s.router)
 
-	if a.Tests != nil && len(a.Tests) > 0 {
-		s.router.Handle("GET", fmt.Sprintf("/test/%s/%s/:category", a.Name, a.Version), a.testHandler(s.addr))
+	s.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
 	}
+	fmt.Println(path.Join("/test", a.root(), ":category"))
+	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler("127.0.0.1"+s.addr))
+
 	s.apis = append(s.apis, a)
 }
 

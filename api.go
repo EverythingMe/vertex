@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"reflect"
 	"regexp"
 	"strings"
@@ -22,6 +23,7 @@ type API struct {
 	Name                  string
 	Title                 string
 	Version               string
+	Root                  string
 	Doc                   string
 	Host                  string
 	DefaultSecurityScheme SecurityScheme
@@ -55,20 +57,18 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 	// add the handler itself as the final middleware
 	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
 
-		// create a new request handler instance
-		reqHandler := reflect.New(T).Interface().(RequestHandler)
-
-		//read params
-		if err := parseInput(r, reqHandler); err != nil {
-			logging.Error("Error reading input: %s", err)
-			return nil, NewErrorCode(err.Error(), InvalidRequest)
+		var reqHandler RequestHandler
+		if T.Kind() == reflect.Struct {
+			// create a new request handler instance
+			reqHandler = reflect.New(T).Interface().(RequestHandler)
+		} else {
+			reqHandler = route.Handler
 		}
 
-		// Validate the input based on the API spec
-		if err := validator.Validate(reqHandler, r); err != nil {
-			logging.Error("Error validating http.Request!: %s", err)
+		//read params
+		if err := parseInput(r, reqHandler, validator); err != nil {
+			logging.Error("Error reading input: %s", err)
 			return nil, NewErrorCode(err.Error(), InvalidRequest)
-
 		}
 
 		return reqHandler.Handle(w, r)
@@ -118,8 +118,12 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 			}
 		}
 
-		if err = a.Renderer.Render(resp, w, r); err != nil {
-			logging.Error("Error rendering response: %s", err)
+		if err != ErrHijacked {
+			if err = a.Renderer.Render(resp, w, r); err != nil {
+				logging.Error("Error rendering response: %s", err)
+			}
+		} else {
+			logging.Debug("Not rendering hijacked request %s", r.RequestURI)
 		}
 
 	}
@@ -128,6 +132,14 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 var routeRe = regexp.MustCompile("\\{([a-zA-Z_\\.0-9]+)\\}")
 
+func (a *API) root() string {
+	if len(a.Root) == 0 {
+		a.Root = strings.Join([]string{"", a.Name, a.Version}, "/")
+	}
+
+	return a.Root
+}
+
 // FullPath returns the calculated full versioned path inside the API of a request.
 //
 // e.g. if my API name is "myapi" and the version is 1.0, FullPath("/foo") returns "/myapi/1.0/foo"
@@ -135,7 +147,7 @@ func (a *API) FullPath(relpath string) string {
 
 	relpath = routeRe.ReplaceAllString(relpath, ":$1")
 
-	ret := strings.TrimRight(fmt.Sprintf("/%s/%s/%s", a.Name, a.Version, strings.TrimLeft(relpath, "/")), "/")
+	ret := path.Join(a.root(), relpath)
 	logging.Debug("FullPath for %s => %s", relpath, ret)
 	return ret
 }
@@ -144,11 +156,15 @@ func (a *API) FullPath(relpath string) string {
 
 func (a *API) Run(addr string) error {
 	router := a.configure(nil)
+
+	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
+		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
+	}
 	// Server the console swagger UI
 	router.ServeFiles("/console/*filepath", http.Dir("./console"))
 
 	// Add a listener for integration tests
-	router.Handle("GET", fmt.Sprintf("/test/%s/%s/:category", a.Name, a.Version), a.testHandler(addr))
+	router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler(addr))
 	return http.ListenAndServe(addr, router)
 }
 
@@ -198,15 +214,7 @@ func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httpr
 
 		w.Header().Set("Content-Type", "text/json")
 		fmt.Fprintf(w, string(b))
-		fmt.Println(string(b))
 
-		//		t, e := template.New("doc").Parse(schemaDocTemplate)
-		//		if e != nil {
-		//			w.Write([]byte(e.Error()))
-		//			return
-		//		}
-
-		//		t.Execute(w, &apiDesc)
 	}
 
 }
@@ -220,10 +228,10 @@ func (a *API) testHandler(addr string) func(w http.ResponseWriter, r *http.Reque
 
 		runner := newTestRunner(w, a, addr, category)
 
-		err := runner.Run(a.Tests)
-		if err != nil {
-			w.Write([]byte("TESTS FAILED\r\n"))
-		}
+		st := time.Now()
+		runner.Run(true)
+
+		fmt.Fprintln(w, time.Since(st))
 
 	}
 }

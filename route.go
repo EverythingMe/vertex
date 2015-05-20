@@ -16,6 +16,7 @@ type Route struct {
 	Methods     MethodFlag
 	Security    SecurityScheme
 	Middleware  []Middleware
+	Test        Tester
 	requestInfo schema.RequestInfo
 }
 

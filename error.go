@@ -2,6 +2,7 @@ package web2
 
 import (
 	"fmt"
+	"net/http"
 )
 
 type Error struct {
@@ -45,8 +46,32 @@ func IsHijacked(err error) bool {
 		return e.Code == Hijacked
 	}
 	return false
-
 }
+
+// convert an internal error (or any other error) to an http code
+func HttpCode(errorCode int) int {
+	switch errorCode {
+
+	case Ok, Hijacked:
+		return http.StatusOK
+	case GeneralFailure:
+		return http.StatusInternalServerError
+	case InvalidRequest:
+		return http.StatusBadRequest
+	case Unauthorized:
+		return http.StatusUnauthorized
+	case InsecureAccessDenied:
+		return http.StatusForbidden
+	case ResourceUnavailable:
+		return http.StatusServiceUnavailable
+	case BackOff:
+		return http.StatusServiceUnavailable
+
+	}
+
+	return http.StatusInternalServerError
+}
+
 func NewErrorCode(e string, code int) *Error {
 
 	return &Error{

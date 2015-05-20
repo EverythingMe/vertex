@@ -38,7 +38,6 @@ func (f funcRenderer) ContentTypes() []string {
 var RenderJSON = RenderFunc(func(res *Response, w http.ResponseWriter, r *http.Request) error {
 
 	if err := writeResponse(w, res, FormValueDefault(r, "callback", "")); err != nil {
-
 		writeError(w, "Error sending response", FormValueDefault(r, "callback", ""))
 	}
 
@@ -61,6 +60,8 @@ func writeError(w http.ResponseWriter, message string, callback string) {
 		ErrorCode:   -1,
 		ErrorString: message,
 	}
+
+	w.WriteHeader(http.StatusInternalServerError)
 
 	buf, e := json.Marshal(response)
 	if e == nil {
@@ -87,7 +88,12 @@ func writeResponse(w http.ResponseWriter, resp *Response, callback string) error
 
 	buf, e := json.Marshal(resp)
 	if e == nil {
+
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if code := HttpCode(resp.ErrorCode); code != http.StatusOK {
+			fmt.Println("Writing error code", resp.ErrorCode, code)
+			w.WriteHeader(code)
+		}
 
 		if callback != "" {
 			w.Write([]byte(fmt.Sprintf("%s(", callback)))
