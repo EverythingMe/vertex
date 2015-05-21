@@ -4,12 +4,12 @@
 
 # Vertex is a friendly, fast and flexible RESTful API building framework
 
-What Vertex includes:
+## What Vertex includes:
 
-    	* An API definition framework
-     * An integrated testing framework for your API
-     * A middleware framework similar (but not compliant) to negroni
-     * Batteries included: JSON rendering, Auto Recover,
+* An API definition framework
+* An integrated testing framework for your API
+* A middleware framework similar (but not compliant) to negroni
+* Batteries included: JSON rendering, Auto Recover,
 
 ## Usage
 
