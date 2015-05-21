@@ -1,4 +1,3 @@
-* Finish Unmarshaler support
 * Incident id / error id and hide explicit errors in logs
 * https support
 * Security Schemes
@@ -7,3 +6,4 @@
 * Middleware:
 	* BasicAuth
 	* 
+* Input sanitation - SQL/JS injection support
