@@ -2,14 +2,82 @@
 --
     import "gitlab.doit9.com/backend/vertex"
 
-# Vertex is a friendly, fast and flexible RESTful API building framework
+### Vertex
 
-## What Vertex includes:
+Vertex is a friendly, fast and flexible RESTful API building framework
+
+
+### What Vertex Includes
 
 * An API definition framework
+
+* Request handlers as structs with automatic data mapping
+
+* Automatic Data Validation
+
 * An integrated testing framework for your API
+
 * A middleware framework similar (but not compliant) to negroni
-* Batteries included: JSON rendering, Auto Recover,
+
+* Batteries included: JSON rendering, Auto Recover, Static File Serving, Request
+Logging, and more
+
+
+### Request Handlers
+
+The basic idea of Vertex revolves around friendly, pre-validated request
+handlers, that leave the developer with the need to write as little boilerplate
+code as possible. Routes in the API are mapped to the RequestHandler interface:
+
+      type RequestHandler interface {
+    	   Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
+      }
+
+You create structs that have all the parameters you need to handle the requests,
+define validations for these parameters, and Vertex does the rest for you. Then
+the handler returns a response object that will be rendered to the client.
+
+Here is an example super simple RequestHandler:
+
+    type UserHandler struct {
+    	Id string `schema:"id" required:"true" doc:"The Id Of the user" maxlen:"30"`
+    }
+
+    func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+
+    	// load the user from the database
+    	user, err := db.Load(h.Id)
+
+    	// return it to the response. No need to write anything directly to the writer
+    	return user, err
+    }
+
+
+### Custom Unmarshaling
+
+### Middleware
+
+    TODO
+
+### Renderers
+
+    TODO
+
+### Defining An API
+
+    TODO
+
+### Running The Server
+
+    TODO
+
+### Integration Tests
+
+    TODO
+
+### API Console
+
+    TODO
 
 ## Usage
 
