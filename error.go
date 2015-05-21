@@ -1,11 +1,11 @@
-package web2
+package vertex
 
 import (
 	"fmt"
 	"net/http"
 )
 
-type Error struct {
+type internalError struct {
 	Message string
 	Code    int
 }
@@ -36,20 +36,51 @@ const (
 	Hijacked = 0
 )
 
+// ErrorString converts an error code to a user "friendly" string
+func errorString(errorCode int) string {
+	switch errorCode {
+	case Ok:
+		return "OK"
+	case Hijacked:
+		return "Request Hijacked By Handler"
+	case GeneralFailure:
+		return "Request Failed"
+	case InvalidRequest:
+		return "Invalid/missing parameters for request"
+	case Unauthorized:
+		return "Unauthorized Request"
+	case InsecureAccessDenied:
+		return "Insecure Access Denied"
+	case ResourceUnavailable:
+		return "Resource Temporary Unavailable"
+	case BackOff:
+		return "Please Back-off and Retry in a While"
+
+	}
+
+	return fmt.Sprintf("Unknown error code: %d", errorCode)
+}
+
 // A special error that should be returned when hijacking a request, taking over response rendering from the renderer
 var ErrHijacked = NewErrorCode("Request Hijacked, Do not rendere response", Hijacked)
 
+// IsHijacked inspects an error and checks whether it represents a hijacked response
 func IsHijacked(err error) bool {
-	if e, ok := err.(*Error); !ok {
+
+	if err == ErrHijacked {
+		return true
+	}
+
+	if e, ok := err.(*internalError); !ok {
 		return false
 	} else {
 		return e.Code == Hijacked
 	}
-	return false
+
 }
 
 // convert an internal error (or any other error) to an http code
-func HttpCode(errorCode int) int {
+func httpCode(errorCode int) int {
 	switch errorCode {
 
 	case Ok, Hijacked:
@@ -72,27 +103,27 @@ func HttpCode(errorCode int) int {
 	return http.StatusInternalServerError
 }
 
-func NewErrorCode(e string, code int) *Error {
+func NewErrorCode(e string, code int) error {
 
-	return &Error{
+	return &internalError{
 		Message: e,
 		Code:    code,
 	}
 }
 
-func NewError(e string) *Error {
+func NewError(e string) error {
 	return NewErrorCode(e, GeneralFailure)
 }
 
 //Format a new web error from message
-func NewErrorf(format string, args ...interface{}) *Error {
-	return &Error{
+func NewErrorf(format string, args ...interface{}) error {
+	return &internalError{
 		Message: fmt.Sprintf(format, args...),
 		Code:    -1,
 	}
 }
 
-func (e *Error) Error() string {
+func (e *internalError) Error() string {
 	if e != nil {
 		return e.Message
 	}

@@ -1,6 +1,9 @@
 package swagger
 
-import "reflect"
+import (
+	"github.com/mcuadros/go-jsonschema-generator"
+	"reflect"
+)
 
 const SwaggerVersion = "2.0"
 
@@ -78,7 +81,7 @@ type Param struct {
 }
 
 // Schema is a generic jsonschema definition - TBD how we want to represent it
-type Schema map[string]interface{}
+type Schema jsonschema.Document
 
 // Response describes a response schema
 type Response struct {
@@ -93,6 +96,7 @@ type Method struct {
 	Produces    []string            `json:"produces,omitempty"`
 	Parameters  []Param             `json:"parameters,omitempty"`
 	Responses   map[string]Response `json:"responses"`
+	Tags        []string            `json:"tags",omitempty`
 }
 
 type Path map[string]Method

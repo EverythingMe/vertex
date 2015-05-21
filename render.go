@@ -1,4 +1,4 @@
-package web2
+package vertex
 
 import (
 	"encoding/json"
@@ -10,40 +10,44 @@ import (
 
 // Renderer is an interface for response renderers
 type Renderer interface {
-	Render(*Response, http.ResponseWriter, *http.Request) error
+	Render(*response, http.ResponseWriter, *http.Request) error
 	ContentTypes() []string
 }
 
 type funcRenderer struct {
-	f            func(*Response, http.ResponseWriter, *http.Request) error
+	f            func(*response, http.ResponseWriter, *http.Request) error
 	contentTypes []string
 }
 
 // Wrap a rendering function as an renderer
-func RenderFunc(f func(*Response, http.ResponseWriter, *http.Request) error, contentTypes ...string) Renderer {
+func RenderFunc(f func(*response, http.ResponseWriter, *http.Request) error, contentTypes ...string) Renderer {
 	return funcRenderer{
 		f:            f,
 		contentTypes: contentTypes,
 	}
 }
 
-func (f funcRenderer) Render(res *Response, w http.ResponseWriter, r *http.Request) error {
+func (f funcRenderer) Render(res *response, w http.ResponseWriter, r *http.Request) error {
 	return f.f(res, w, r)
 }
 func (f funcRenderer) ContentTypes() []string {
 	return f.contentTypes
 }
 
-// RenderJSON is the default JSON renderer. It dumps the response object to a JSON object
-var RenderJSON = RenderFunc(func(res *Response, w http.ResponseWriter, r *http.Request) error {
+type JSONRenderer struct{}
 
-	if err := writeResponse(w, res, FormValueDefault(r, "callback", "")); err != nil {
-		writeError(w, "Error sending response", FormValueDefault(r, "callback", ""))
+func (JSONRenderer) Render(res *response, w http.ResponseWriter, r *http.Request) error {
+
+	if err := writeResponse(w, res, formValueDefault(r, "callback", "")); err != nil {
+		writeError(w, "Error sending response", formValueDefault(r, "callback", ""))
 	}
 
 	return nil
-},
-	"text/json")
+}
+
+func (JSONRenderer) ContentTypes() []string {
+	return []string{"text/json"}
+}
 
 //serialize an error string inside an object
 func writeError(w http.ResponseWriter, message string, callback string) {
@@ -56,7 +60,7 @@ func writeError(w http.ResponseWriter, message string, callback string) {
 		}
 	}()
 
-	response := Response{
+	response := response{
 		ErrorCode:   -1,
 		ErrorString: message,
 	}
@@ -84,13 +88,13 @@ func writeError(w http.ResponseWriter, message string, callback string) {
 }
 
 //serialize a response object to JSON
-func writeResponse(w http.ResponseWriter, resp *Response, callback string) error {
+func writeResponse(w http.ResponseWriter, resp *response, callback string) error {
 
 	buf, e := json.Marshal(resp)
 	if e == nil {
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		if code := HttpCode(resp.ErrorCode); code != http.StatusOK {
+		if code := httpCode(resp.ErrorCode); code != http.StatusOK {
 			fmt.Println("Writing error code", resp.ErrorCode, code)
 			w.WriteHeader(code)
 		}

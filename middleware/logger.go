@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/dvirsky/go-pylog/logging"
-	"gitlab.doit9.com/backend/web2"
+	"gitlab.doit9.com/backend/vertex"
 )
 
-var RequestLogger = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next web2.HandlerFunc) (interface{}, error) {
+var RequestLogger = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (interface{}, error) {
 
 	logging.Info("Handling %s %s", r.Method, r.URL.String())
 
@@ -17,7 +17,7 @@ var RequestLogger = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Requ
 	return ret, err
 })
 
-//func StaticText(msg string) web2.MiddlewareFunc {
+//func StaticText(msg string) vertex.MiddlewareFunc {
 
 //	//h := http.FileServer(dir)
 //	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {

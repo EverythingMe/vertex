@@ -6,10 +6,10 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/backend/web2"
+	"gitlab.doit9.com/backend/vertex"
 )
 
-var AutoRecover = web2.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next web2.HandlerFunc) (ret interface{}, err error) {
+var AutoRecover = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (ret interface{}, err error) {
 
 	defer func() {
 

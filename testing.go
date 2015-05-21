@@ -1,4 +1,4 @@
-package web2
+package vertex
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"github.com/dvirsky/go-pylog/logging"
 )
 
-// TestCase represents a testcase the API runs for a certain API.
+// Tester represents a testcase the API runs for a certain API.
 //
 // Each API contains a list of integration tests that can be run to monitor it. Each test can have a category
 // associated with it, and we can run tests by a specific category only.
@@ -55,12 +55,6 @@ func CriticalTest(f func(ctx *TestContext) error) Tester {
 func WarningTest(f func(ctx *TestContext) error) Tester {
 	return testFunc{f, WarningTests}
 }
-
-// DummyTest can be used as a placeholder for empty tests that do not report MISSING
-var DummyTest = WarningTest(func(ctx *TestContext) error {
-	ctx.Skip()
-	return nil
-})
 
 type TestContext struct {
 	api       *API
@@ -142,15 +136,15 @@ func (t *TestContext) JsonRequest(r *http.Request, v interface{}) (*http.Respons
 
 }
 
-type TestRunner struct {
+type testRunner struct {
 	category   string
 	serverAddr string
 	api        *API
 	output     *tabwriter.Writer
 }
 
-func newTestRunner(output io.Writer, a *API, addr string, category string) *TestRunner {
-	return &TestRunner{
+func newTestRunner(output io.Writer, a *API, addr string, category string) *testRunner {
+	return &testRunner{
 		serverAddr: addr,
 		category:   category,
 		api:        a,
@@ -167,7 +161,7 @@ const (
 )
 
 // runTest safely runs a test and catches its output and panics
-func (t *TestRunner) runTest(tc Tester, path string) (status string, err error, msgs []string) {
+func (t *testRunner) runTest(tc Tester, path string) (status string, err error, msgs []string) {
 
 	// recover from panics and analyze the input
 	defer func() {
@@ -216,7 +210,7 @@ func (t *TestRunner) runTest(tc Tester, path string) (status string, err error, 
 }
 
 // Determine whether a test shuold run based on the context
-func (t *TestRunner) shouldRun(tc Tester) bool {
+func (t *testRunner) shouldRun(tc Tester) bool {
 
 	if t.category == "" || t.category == AllTests {
 		return true
@@ -238,7 +232,7 @@ func getTestCategory(tc Tester) string {
 }
 
 // invokeTest runs a tester and prints the output
-func (t *TestRunner) invokeTest(path string, tc Tester, wg *sync.WaitGroup) {
+func (t *testRunner) invokeTest(path string, tc Tester, wg *sync.WaitGroup) {
 
 	if t.shouldRun(tc) {
 
@@ -283,7 +277,7 @@ func (t *TestRunner) invokeTest(path string, tc Tester, wg *sync.WaitGroup) {
 	}
 }
 
-func (t *TestRunner) Run(parallel bool) error {
+func (t *testRunner) Run(parallel bool) error {
 
 	wg := &sync.WaitGroup{}
 

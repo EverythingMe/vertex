@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gitlab.doit9.com/backend/web2/swagger"
+	"gitlab.doit9.com/backend/vertex/swagger"
 )
 
 type MockHandler struct {
@@ -17,23 +17,23 @@ type MockHandler struct {
 }
 
 var expected = []ParamInfo{
-	{StructKey: "Int", Name: "int", Type: reflect.Int, Required: true, Description: "integer field",
+	{StructKey: "Int", Name: "int", Kind: reflect.Int, Required: true, Description: "integer field",
 		HasMin: true, Min: -100, HasMax: true, Max: 100, HasDefault: true, Default: int64(4), RawDefault: "4", In: "query"},
-	{StructKey: "Float", Name: "float", Type: reflect.Float64, Required: true, Description: "float field",
+	{StructKey: "Float", Name: "float", Kind: reflect.Float64, Required: true, Description: "float field",
 		HasMin: true, Min: -100, HasMax: true, Max: 100, HasDefault: true, Default: float64(3.141), RawDefault: "3.141", In: "query"},
-	{StructKey: "Bool", Name: "bool", Type: reflect.Bool, Required: false, Description: "bool field",
+	{StructKey: "Bool", Name: "bool", Kind: reflect.Bool, Required: false, Description: "bool field",
 		HasDefault: true, Default: true, RawDefault: "true", In: "query"},
-	{StructKey: "String", Name: "string", Type: reflect.String, Required: false, Description: "string field",
+	{StructKey: "String", Name: "string", Kind: reflect.String, Required: false, Description: "string field",
 		HasDefault: true, Default: "WAT WAT", RawDefault: "WAT WAT", MinLength: 1, MaxLength: 4, Pattern: "^[a-zA-Z]+$", In: "query"},
-	{StructKey: "Lst", Name: "list", Type: reflect.Slice, Required: false, Description: "string list field",
+	{StructKey: "Lst", Name: "list", Kind: reflect.Slice, Required: false, Description: "string list field",
 		HasDefault: true, Default: []string{"foo", "bar", "baz"}, RawDefault: "  foo, bar, baz    ", In: "query"},
 }
 
 func TestParamInfo(t *testing.T) {
 
 	pi := newParamInfo(reflect.TypeOf(MockHandler{}).Field(0))
-	if pi.Type != reflect.Int {
-		t.Errorf("Wrong reflect type. want int got %v", pi.Type)
+	if pi.Kind != reflect.Int {
+		t.Errorf("Wrong reflect type. want int got %v", pi.Kind)
 	}
 	if pi.Name != "int" {
 		t.Errorf("Wrong name, want int, got %v", pi.Name)
@@ -83,6 +83,9 @@ func TestRequestInfo(t *testing.T) {
 		t.Error(err)
 	}
 
+	if ri.Group != "foo" {
+		t.Errorf("Bad group '%s'", ri.Group)
+	}
 	if ri.Path != path {
 		t.Errorf("Wrong path, expected %s, got '%s'", path, ri.Path)
 	}
@@ -114,7 +117,7 @@ func TestRequestInfo(t *testing.T) {
 		p := ri.Params[i]
 		s := sw.Parameters[i]
 
-		if p.Name != s.Name || p.RawDefault != s.Default || s.Type != swagger.TypeOf(p.Type) {
+		if p.Name != s.Name || p.RawDefault != s.Default || s.Type != swagger.TypeOf(p.Kind) {
 			t.Errorf("Unmatching param %s", p.Name)
 		}
 
@@ -158,7 +161,7 @@ func TestValidation(t *testing.T) {
 	badreq, _ := http.NewRequest("GET", "http://example.com/foo?float=1.4&string=word&bool=true&list=foo&list=bar", nil)
 	badreq.ParseForm()
 	if err = v.Validate(h, badreq); err == nil {
-		t.Errorf("We didn't fail on missing int from request", err)
+		t.Errorf("We didn't fail on missing int from request: %s", err)
 	}
 
 	// fail on bad string value

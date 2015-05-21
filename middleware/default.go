@@ -1,8 +1,8 @@
 package middleware
 
-import "gitlab.doit9.com/backend/web2"
+import "gitlab.doit9.com/backend/vertex"
 
-var DefaultMiddleware = []web2.Middleware{
+var DefaultMiddleware = []vertex.Middleware{
 	AutoRecover,
 	RequestLogger,
 	CORS,

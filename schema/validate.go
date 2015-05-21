@@ -272,7 +272,7 @@ func NewRequestValidator(ri RequestInfo) *RequestValidator {
 	for _, pi := range ri.Params {
 
 		var vali validator
-		switch pi.Type {
+		switch pi.Kind {
 		//		case reflect.Struct:
 
 		//			//for structs - we add validators recursively
@@ -293,7 +293,7 @@ func NewRequestValidator(ri RequestInfo) *RequestValidator {
 		case reflect.Bool:
 			vali = newBoolValidator(pi)
 		default:
-			logging.Error("I don't know how to validate %s", pi.Type)
+			logging.Error("I don't know how to validate %s", pi.Kind)
 			continue
 		}
 

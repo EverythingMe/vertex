@@ -1,4 +1,4 @@
-package web2
+package vertex
 
 import (
 	"encoding/json"
@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.doit9.com/backend/web2/schema"
-	"gitlab.doit9.com/backend/web2/swagger"
+	"gitlab.doit9.com/backend/vertex/schema"
+	"gitlab.doit9.com/backend/vertex/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
 	"github.com/julienschmidt/httprouter"
@@ -83,7 +83,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 	}
 
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		resp := &Response{
+		resp := &response{
 			ErrorString:    "OK",
 			ErrorCode:      1,
 			ResponseObject: nil,
@@ -109,7 +109,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 			switch e := err.(type) {
 			//handle a "proper" internal API error
-			case *Error:
+			case *internalError:
 				resp.ErrorCode = e.Code
 				resp.ErrorString = e.Message
 			default:
@@ -153,7 +153,6 @@ func (a *API) FullPath(relpath string) string {
 }
 
 // Run runs a single API server
-
 func (a *API) Run(addr string) error {
 	router := a.configure(nil)
 
@@ -174,7 +173,10 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 	}
 
 	for path, route := range a.Routes {
-		route.parseInfo(path)
+
+		if err := route.parseInfo(path); err != nil {
+			logging.Error("Error parsing info for %s: %s", path, err)
+		}
 		a.Routes[path] = route
 		h := a.handler(route)
 
@@ -236,7 +238,7 @@ func (a *API) testHandler(addr string) func(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// Return info on all the request
+// ToSwagger Converts an API definition into a swagger API object for serialization
 func (a API) ToSwagger() *swagger.API {
 
 	schemes := []string{"https"}

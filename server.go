@@ -1,8 +1,9 @@
-package web2
+package vertex
 
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"path"
 
@@ -16,6 +17,23 @@ type Server struct {
 	router *httprouter.Router
 }
 
+var apis = []*API{}
+
+// Add an API to the global list of auto-registered APIs. By adding an init() func to your api module, you can create auto-registration.
+//
+// e.g. in your API add the lines:
+//	// define the API
+//	var myApi = &vertex.API { ... }
+
+//	func init() {
+//		// register the API in the vertex server
+//		vertex.RegisterAPI(myApi)
+//	}
+func RegisterAPI(a *API) {
+	log.Printf("Adding api %s/%s", a.Name, a.Version)
+	apis = append(apis, a)
+}
+
 // NewServer creates a new blank server to add APIs to
 func NewServer(addr string) *Server {
 	return &Server{
@@ -25,7 +43,7 @@ func NewServer(addr string) *Server {
 	}
 }
 
-// Add an API to the server
+// AddAPI adds an API to the server
 func (s *Server) AddAPI(a *API) {
 	a.configure(s.router)
 
@@ -45,12 +63,16 @@ func (s *Server) Handler() http.Handler {
 
 // Run runs the server if it has any APIs registered on it
 func (s *Server) Run() error {
-	if len(s.apis) == 0 {
+
+	if len(s.apis)+len(apis) == 0 {
 		return errors.New("No APIs defined for server")
+	}
+	for _, a := range apis {
+		s.AddAPI(a)
 	}
 
 	// Server the console swagger UI
-	s.router.ServeFiles("/console/*filepath", http.Dir("./console"))
+	s.router.ServeFiles("/console/*filepath", http.Dir("../console"))
 
 	return http.ListenAndServe(s.addr, s.router)
 }

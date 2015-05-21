@@ -6,9 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.doit9.com/backend/web2/swagger"
+	"gitlab.doit9.com/backend/vertex/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
+	"github.com/mcuadros/go-jsonschema-generator"
 )
 
 // Struct field definitions
@@ -40,8 +41,12 @@ type ParamInfo struct {
 	// Is this param required or optional
 	Required bool
 
-	// The param's type as a reflect.Kind. We allow string,int,float,bool,slice
-	Type reflect.Kind
+	// The param's reflect.Kind. We allow string,int,float,bool,slice.
+	// We allow struct only for unmarshalers (see Unmarshaler)
+	Kind reflect.Kind
+
+	// the param's native type
+	Type reflect.Type
 
 	// extra format info for swagger compliance. see https://github.com/swagger-api/swagger-spec/blob/master/versions/1.2.md#431-primitives
 	Format string
@@ -145,7 +150,8 @@ func newParamInfo(field reflect.StructField) ParamInfo {
 	ret.In = getTag(field, InTag, "query")
 	ret.Description = field.Tag.Get(DocTag)
 
-	ret.Type = field.Type.Kind()
+	ret.Kind = field.Type.Kind()
+	ret.Type = field.Type
 	ret.Required = boolTag(field, RequiredTag, false)
 	ret.Pattern = field.Tag.Get(PatternTag)
 
@@ -164,21 +170,38 @@ func newParamInfo(field reflect.StructField) ParamInfo {
 type RequestInfo struct {
 	Path        string
 	Description string
+	Group       string
+	Returns     interface{}
 	Params      []ParamInfo
 }
 
 func (r RequestInfo) ToSwagger() swagger.Method {
 	ret := swagger.Method{
 		Description: r.Description,
-		Responses: map[string]swagger.Response{
-			"default": {"", swagger.Schema{}},
-		},
-		Parameters: make([]swagger.Param, 0),
+		Responses:   map[string]swagger.Response{},
+		Parameters:  make([]swagger.Param, 0),
+		Tags:        []string{strings.Title(r.Group)},
 	}
 
 	for _, p := range r.Params {
 		ret.Parameters = append(ret.Parameters, p.ToSwagger())
 	}
+
+	if r.Returns != nil {
+
+		s := &jsonschema.Document{}
+		s.Read(r.Returns)
+
+		ret.Responses["default"] = swagger.Response{
+			Description: reflect.TypeOf(r.Returns).String(),
+			Schema:      swagger.Schema(*s),
+		}
+
+	} else {
+		ret.Responses["default"] = swagger.Response{"", swagger.Schema{}}
+
+	}
+
 	return ret
 }
 
@@ -211,17 +234,32 @@ func extractParams(T reflect.Type) (ret []ParamInfo) {
 }
 
 // NewRequestInfo Builds a requestInfo from a requestHandler struct using reflection
-func NewRequestInfo(T reflect.Type, path string, description string) (RequestInfo, error) {
+func NewRequestInfo(T reflect.Type, pth string, description string, returnValue interface{}) (RequestInfo, error) {
 
 	if T.Kind() == reflect.Ptr {
 		T = T.Elem()
 	}
 
-	if T.Kind() != reflect.Struct {
+	// we only allow funcs and structs
+	if T.Kind() != reflect.Struct && T.Kind() != reflect.Func {
 		return RequestInfo{}, fmt.Errorf("Could not extract request info from non struct type")
 	}
 
-	ret := RequestInfo{Path: path, Description: description, Params: make([]ParamInfo, 0)}
+	ret := RequestInfo{Path: pth,
+		Description: description,
+		Params:      make([]ParamInfo, 0),
+		Returns:     returnValue,
+	}
+
+	// take the first part of the path and make it the "group" name for swagger tagging
+	if parts := strings.SplitN(strings.TrimLeft(pth, "/"), "/", 2); len(parts) > 0 {
+		ret.Group = parts[0]
+	}
+
+	// for funcs we don't create struct based info
+	if T.Kind() != reflect.Struct {
+		return ret, nil
+	}
 
 	for i := 0; i < T.NumField(); i++ {
 
@@ -231,7 +269,7 @@ func NewRequestInfo(T reflect.Type, path string, description string) (RequestInf
 		}
 
 		// a struct means this is an embedded request object
-		if field.Type.Kind() == reflect.Struct {
+		if field.Type.Kind() == reflect.Struct && field.Anonymous {
 			ret.Params = append(extractParams(field.Type), ret.Params...)
 		} else {
 
@@ -251,7 +289,7 @@ func (p ParamInfo) ToSwagger() swagger.Param {
 	return swagger.Param{
 		Name:        p.Name,
 		Description: p.Description,
-		Type:        swagger.TypeOf(p.Type),
+		Type:        swagger.TypeOf(p.Kind),
 		Required:    p.Required,
 		Format:      p.Format,
 		Default:     p.RawDefault,

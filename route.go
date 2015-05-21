@@ -1,9 +1,13 @@
-package web2
+package vertex
 
 import (
+	"fmt"
 	"reflect"
 
-	"gitlab.doit9.com/backend/web2/schema"
+	"github.com/dvirsky/go-pylog/logging"
+	gorilla "github.com/gorilla/schema"
+
+	"gitlab.doit9.com/backend/vertex/schema"
 )
 
 // A routing map for an API
@@ -17,15 +21,37 @@ type Route struct {
 	Security    SecurityScheme
 	Middleware  []Middleware
 	Test        Tester
+	Returns     interface{}
 	requestInfo schema.RequestInfo
 }
 
 func (r *Route) parseInfo(path string) error {
 
-	ri, err := schema.NewRequestInfo(reflect.TypeOf(r.Handler), path, r.Description)
+	ri, err := schema.NewRequestInfo(reflect.TypeOf(r.Handler), path, r.Description, r.Returns)
 	if err != nil {
 		return err
 	}
+
+	// search for custom unmarshallers in the request info
+	for _, param := range ri.Params {
+		if param.Type.Kind() == reflect.Struct {
+
+			logging.Debug("Checking unmarshaller for %s", param.Type)
+			val := reflect.Zero(param.Type).Interface()
+
+			if unm, ok := val.(Unmarshaler); ok {
+				logging.Info("Registering unmarshaller for %#v", val)
+
+				schemaDecoder.RegisterConverter(val, gorilla.Converter(func(s string) reflect.Value {
+					fmt.Println("CONVERTING UNMARSHALER")
+					return reflect.ValueOf(unm.UnmarshalRequestData(s))
+				}))
+
+			}
+		}
+
+	}
+
 	r.requestInfo = ri
 	return nil
 
