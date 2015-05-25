@@ -1,0 +1,11 @@
+server:
+  listen: 9974
+  allow_insecure: true
+auth:
+  user: foo
+  password: bar
+
+apis:
+  testung:
+    foo: wat
+    bar: wat wat

@@ -281,13 +281,13 @@ func (t *testRunner) Run(parallel bool) error {
 
 	wg := &sync.WaitGroup{}
 
-	for path, route := range t.api.Routes {
+	for _, route := range t.api.Routes {
 
 		if parallel {
 			wg.Add(1)
-			go t.invokeTest(path, route.Test, wg)
+			go t.invokeTest(route.Path, route.Test, wg)
 		} else {
-			t.invokeTest(path, route.Test, nil)
+			t.invokeTest(route.Path, route.Test, nil)
 		}
 
 	}

@@ -179,10 +179,13 @@ func (r RequestInfo) ToSwagger() swagger.Method {
 	ret := swagger.Method{
 		Description: r.Description,
 		Responses:   map[string]swagger.Response{},
-		Parameters:  make([]swagger.Param, 0),
+		Parameters:  nil,
 		Tags:        []string{strings.Title(r.Group)},
 	}
 
+	if len(r.Params) > 0 {
+		ret.Parameters = make([]swagger.Param, 0)
+	}
 	for _, p := range r.Params {
 		ret.Parameters = append(ret.Parameters, p.ToSwagger())
 	}

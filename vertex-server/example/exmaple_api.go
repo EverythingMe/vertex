@@ -64,45 +64,60 @@ func (b Banana) UnmarshalRequestData(data string) interface{} {
 	return Banana{}
 }
 
+var config = struct {
+	Foo string
+	Bar string
+}{
+	Foo: "Hello",
+	Bar: "Wrold",
+}
+
 func init() {
+
 	root := "/testung/1.0"
-	vertex.RegisterAPI(&vertex.API{
-		Host:          "localhost:9947",
-		Name:          "testung",
-		Version:       "1.0",
-		Root:          root,
-		Doc:           "Our fancy testung API",
-		Title:         "Testung API!",
-		Middleware:    middleware.DefaultMiddleware,
-		Renderer:      vertex.JSONRenderer{},
-		AllowInsecure: true,
-		Routes: vertex.RouteMap{
-			"/user/byId/{id}": {
-				Description: "Get User Info by id or name",
-				Handler:     UserHandler{},
-				Methods:     vertex.GET,
-				Test:        vertex.WarningTest(testUserHandler),
-				Returns:     User{},
+	vertex.Register("testung", func() *vertex.API {
+
+		return &vertex.API{
+			Name:          "testung",
+			Version:       "1.0",
+			Root:          root,
+			Doc:           "Our fancy testung API",
+			Title:         "Testung API!",
+			Middleware:    middleware.DefaultMiddleware,
+			Renderer:      vertex.JSONRenderer{},
+			AllowInsecure: true,
+			Routes: vertex.Routes{
+				{
+					Path:        "/user/byId/{id}",
+					Description: "Get User Info by id or name",
+					Handler:     UserHandler{},
+					Methods:     vertex.GET,
+					Test:        vertex.WarningTest(testUserHandler),
+					Returns:     User{},
+					Middleware: []vertex.Middleware{
+						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
+					},
+				},
+				//			"/user/byName/{id}": {
+				//				Description: "Get User Info by id or name",
+				//				Handler:     UserHandler{},
+				//				Methods:     vertex.POST,
+				//				Test:        vertex.WarningTest(testUserHandler),
+				//				Returns:     User{},
+				//			},
+				//			"/test/foo": {
+				//				Description: "just for testing",
+				//				Handler:     vertex.VoidHandler,
+				//				Methods:     vertex.GET | vertex.POST,
+				//			},
+				//			"/test/bar": {
+				//				Description: "Static",
+				//				Handler:     vertex.StaticHandler(path.Join(root, "static"), http.Dir("/tmp")),
+				//				Methods:     vertex.GET,
+				//				Test:        vertex.DummyTest,
+				//			},
 			},
-			//			"/user/byName/{id}": {
-			//				Description: "Get User Info by id or name",
-			//				Handler:     UserHandler{},
-			//				Methods:     vertex.POST,
-			//				Test:        vertex.WarningTest(testUserHandler),
-			//				Returns:     User{},
-			//			},
-			//			"/test/foo": {
-			//				Description: "just for testing",
-			//				Handler:     vertex.VoidHandler,
-			//				Methods:     vertex.GET | vertex.POST,
-			//			},
-			//			"/test/bar": {
-			//				Description: "Static",
-			//				Handler:     vertex.StaticHandler(path.Join(root, "static"), http.Dir("/tmp")),
-			//				Methods:     vertex.GET,
-			//				Test:        vertex.DummyTest,
-			//			},
-		},
-	})
+		}
+	}, &config)
 
 }

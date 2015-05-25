@@ -25,10 +25,9 @@ type API struct {
 	Version               string
 	Root                  string
 	Doc                   string
-	Host                  string
 	DefaultSecurityScheme SecurityScheme
 	Renderer              Renderer
-	Routes                RouteMap
+	Routes                Routes
 	Middleware            []Middleware
 	Tests                 []Tester
 	AllowInsecure         bool
@@ -152,43 +151,29 @@ func (a *API) FullPath(relpath string) string {
 	return ret
 }
 
-// Run runs a single API server
-func (a *API) Run(addr string) error {
-	router := a.configure(nil)
-
-	router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
-	}
-	// Server the console swagger UI
-	router.ServeFiles("/console/*filepath", http.Dir("./console"))
-
-	// Add a listener for integration tests
-	router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler(addr))
-	return http.ListenAndServe(addr, router)
-}
-
 func (a *API) configure(router *httprouter.Router) *httprouter.Router {
+
 	if router == nil {
 		router = httprouter.New()
 	}
 
-	for path, route := range a.Routes {
+	for i, route := range a.Routes {
 
-		if err := route.parseInfo(path); err != nil {
-			logging.Error("Error parsing info for %s: %s", path, err)
+		if err := route.parseInfo(route.Path); err != nil {
+			logging.Error("Error parsing info for %s: %s", route.Path, err)
 		}
-		a.Routes[path] = route
+		a.Routes[i] = route
 		h := a.handler(route)
 
-		path = a.FullPath(path)
+		pth := a.FullPath(route.Path)
 
 		if route.Methods&GET == GET {
-			logging.Info("Registering GET handler %v to path %s", h, path)
-			router.Handle("GET", path, h)
+			logging.Info("Registering GET handler %v to path %s", h, pth)
+			router.Handle("GET", pth, h)
 		}
 		if route.Methods&POST == POST {
-			logging.Info("Registering POST handler %v to path %s", h, path)
-			router.Handle("POST", path, h)
+			logging.Info("Registering POST handler %v to path %s", h, pth)
+			router.Handle("POST", pth, h)
 
 		}
 
@@ -207,11 +192,10 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 
 func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	apiDesc := a.ToSwagger()
-
 	// A hander that generates html documentation of the API. Bind it to a url explicitly
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
+		apiDesc := a.ToSwagger(r.Host)
 		b, _ := json.MarshalIndent(apiDesc, "", "  ")
 
 		w.Header().Set("Content-Type", "text/json")
@@ -239,7 +223,7 @@ func (a *API) testHandler(addr string) func(w http.ResponseWriter, r *http.Reque
 }
 
 // ToSwagger Converts an API definition into a swagger API object for serialization
-func (a API) ToSwagger() *swagger.API {
+func (a API) ToSwagger(serverUrl string) *swagger.API {
 
 	schemes := []string{"https"}
 
@@ -247,14 +231,14 @@ func (a API) ToSwagger() *swagger.API {
 	if a.AllowInsecure {
 		schemes = []string{"http", "https"}
 	}
-	ret := swagger.NewAPI(a.Host, a.Title, a.Version, a.Doc, a.FullPath(""), schemes)
+	ret := swagger.NewAPI(serverUrl, a.Title, a.Version, a.Doc, a.FullPath(""), schemes)
 	ret.Consumes = []string{"text/json"}
 	ret.Produces = a.Renderer.ContentTypes()
-	for path, route := range a.Routes {
+	for _, route := range a.Routes {
 
 		ri := route.requestInfo
 
-		p := ret.AddPath(path)
+		p := ret.AddPath(route.Path)
 		method := ri.ToSwagger()
 		fmt.Printf("%#v\n", ri)
 

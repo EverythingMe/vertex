@@ -11,10 +11,11 @@ import (
 )
 
 // A routing map for an API
-type RouteMap map[string]Route
+type Routes []Route
 
 // Route represents a single route (path) in the API and its handler and optional extra middleware
 type Route struct {
+	Path        string
 	Description string
 	Handler     RequestHandler
 	Methods     MethodFlag

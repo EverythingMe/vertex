@@ -1,4 +1,4 @@
-package vertex_test
+package vertex
 
 import (
 	"encoding/json"
@@ -7,37 +7,29 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
-	"time"
-
-	"gitlab.doit9.com/backend/vertex"
-	"gitlab.doit9.com/backend/vertex/middleware"
-	"gitlab.doit9.com/backend/vertex/swagger"
-
-	"github.com/dvirsky/go-pylog/logging"
 )
 
-type DateTime time.Time
-
-func (d *DateTime) UnmarshalParam(v string) error {
-	return json.Unmarshal([]byte(v), d)
+type MockHandler struct {
+	Foo string `schema:"foo" required:"true"`
+	Bar string `schema:"bar" required:"true"`
 }
 
-type UserHandler struct {
-	Id   string `schema:"id" required:"true" doc:"The Id Of the user" in:"path"`
-	Name string `schema:"name" maxlen:"100" required:"true" doc:"The Name Of the user"`
+func (h MockHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+
+	return map[string]string{"foo": h.Foo, "bar": h.Bar}, nil
 }
 
-func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+const middlewareHeader = "X-Middleware-Message"
 
-	return fmt.Sprintf("Your name is %s and id is %s", h.Name, h.Id), nil
+func makeMockMW(header string) MiddlewareFunc {
+
+	return MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+		w.Header().Add(middlewareHeader, header)
+		return next(w, r)
+	})
 }
 
-var loggingMW = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (interface{}, error) {
-	logging.Info("Logging request %s", r.URL.String())
-	return next(w, r)
-})
-
-func testUserHandler(t *vertex.TestContext) error {
+func testUserHandler(t *TestContext) error {
 
 	req, err := t.NewRequest("GET", nil, nil)
 	if err != nil {
@@ -56,80 +48,131 @@ func testUserHandler(t *vertex.TestContext) error {
 
 func TestMiddleware(t *testing.T) {
 
-	//	mw1 := vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next web2.HandlerFunc) (interface{}, error) {
-	//		fmt.Println("mw1")
-	//		return next(w, r)
-	//	})
+	mw1 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+		fmt.Fprint(w, "mw1,")
+		return next(w, r)
+	})
 
-	//	mw2 := vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next web2.HandlerFunc) (interface{}, error) {
-	//		fmt.Println("mw2")
-	//		if next != nil {
-	//			return next(w, r)
-	//		}
-	//		return nil, nil
+	mw2 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+		fmt.Fprint(w, "mw2,")
+		if next != nil {
+			return next(w, r)
+		}
+		return nil, nil
 
-	//	})
+	})
 
-	//chain := vertex.buildChain([]Middleware{mw1, mw2})
+	mw3 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+		fmt.Fprint(w, "mw3")
 
-	///chain.Handle(nil, nil)
+		return nil, nil
+
+	})
+	recorder := httptest.NewRecorder()
+	chain := buildChain([]Middleware{mw1, mw2, mw3})
+
+	chain.handle(recorder, nil)
+	expected := "mw1,mw2,mw3"
+	if recorder.Body.String() != expected {
+		t.Errorf("Expected response to be '%s', got '%s'", expected, recorder.Body.String())
+	}
 
 }
 
-func TestAPI(t *testing.T) {
-
-	//t.SkipNow()
-
-	a := &vertex.API{
-		Host:          "localhost:9947",
-		Name:          "testung",
-		Version:       "1.0",
-		Doc:           "Our fancy testung API",
-		Title:         "Testung API!",
-		Middleware:    middleware.DefaultMiddleware,
-		Renderer:      vertex.RenderJSON,
-		AllowInsecure: true,
-		Routes: vertex.RouteMap{
-			"/user/{id}": {
-				Description: "Get User Info by id or name",
-				Handler:     UserHandler{},
-				Methods:     vertex.GET,
-			},
+var mockAPI = &API{
+	Root:          "/mock",
+	Name:          "testung",
+	Version:       "1.0",
+	Doc:           "Our fancy testung API",
+	Title:         "Testung API!",
+	Renderer:      JSONRenderer{},
+	AllowInsecure: true,
+	Middleware:    []Middleware{makeMockMW("Global middleware")},
+	Routes: Routes{
+		{
+			Path:        "/test",
+			Description: "test",
+			Handler:     MockHandler{},
+			Methods:     GET,
+			Middleware:  []Middleware{makeMockMW("Private middleware")},
 		},
+	},
+}
+
+func TestRegistration(t *testing.T) {
+
+	builder := func() *API {
+		return mockAPI
 	}
 
-	srv := vertex.NewServer(":9947")
-	srv.AddAPI(a)
+	Register("testung", builder, nil)
 
-	//	if err := srv.Run(); err != nil {
-	//		t.Fatal(err)
-	//	}
+	if len(apiBuilders) != 1 {
+		t.Fatalf("Wrong number of registered APIs: %d", len(apiBuilders))
+	}
+	srv := NewServer(":9947")
+	srv.InitAPIs()
+	if len(srv.apis) != 1 {
+		t.Errorf("API not registered in server")
+	}
+
+}
+
+func TestIntegration(t *testing.T) {
+	srv := NewServer(":9947")
+	srv.AddAPI(mockAPI)
 
 	s := httptest.NewServer(srv.Handler())
 	defer s.Close()
 
-	u := fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), a.FullPath("/swagger"))
+	u := fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/test"))
+	u += "?foo=f&bar=b"
 	t.Log(u)
 
 	res, err := http.Get(u)
 	if err != nil {
-		t.Errorf("Could not get swagger data")
+		t.Errorf("Could not get response data")
 	}
 
 	defer res.Body.Close()
-	//	b, err := ioutil.ReadAll(res.Body)
-	//	fmt.Println(string(b))
-	var sw swagger.API
+
+	resp := response{}
 	dec := json.NewDecoder(res.Body)
-	if err = dec.Decode(&sw); err != nil {
+	if err = dec.Decode(&resp); err != nil {
 		t.Errorf("Could not decode swagger def: %s", err)
 	}
 
-	swexp := a.ToSwagger()
-
-	if !reflect.DeepEqual(sw, *swexp) {
-		t.Errorf("Unmatching api descs:\n%#v\n%#v", sw, *swexp)
+	if resp.ErrorCode != Ok {
+		t.Errorf("bad response code: %d", resp.ErrorCode)
 	}
-	//fmt.Println(sw)
 
+	if resp.ErrorString != "OK" {
+		t.Errorf("Bad response strin: %s", resp.ErrorString)
+	}
+
+	if resp.ProcessingTime <= 0 {
+		t.Errorf("Bad processing time: %v", resp.ProcessingTime)
+	}
+
+	if resp.ResponseObject == nil {
+		t.Errorf("Bad response object")
+	}
+
+	if m, ok := resp.ResponseObject.(map[string]interface{}); !ok {
+		t.Errorf("Bad response type: %s", reflect.TypeOf(resp.ResponseObject))
+	} else {
+
+		if m["foo"] != "f" || m["bar"] != "b" {
+			t.Errorf("Bad response map: %v", m)
+		}
+
+	}
+
+	if h, found := res.Header[middlewareHeader]; !found || len(h) == 0 {
+		t.Error("Could not fine middleware headers")
+	} else {
+		if h[0] != "Global middleware" || h[1] != "Private middleware" {
+			t.Errorf("Bad m2 injected headers: %s", h)
+		}
+	}
 }

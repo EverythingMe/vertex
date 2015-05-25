@@ -3,10 +3,10 @@ package vertex
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"path"
 
+	"github.com/dvirsky/go-pylog/logging"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -17,21 +17,25 @@ type Server struct {
 	router *httprouter.Router
 }
 
-var apis = []*API{}
+type builderFunc func() *API
 
-// Add an API to the global list of auto-registered APIs. By adding an init() func to your api module, you can create auto-registration.
+var apiBuilders = map[string]builderFunc{}
+
+// Register lest you automatically add an API to the server from your module's init() function.
 //
-// e.g. in your API add the lines:
-//	// define the API
-//	var myApi = &vertex.API { ... }
+// name is a unique name for your API (doesn't have to match the API name exactly).
+//
+// builder is a func that creates the API when we are ready to start the server.
+//
+// Optionally, you can pass a pointer to a config struct, or nil if you don't need to. This way, we can read the config struct's values
+// from a unified config file BEFORE we call the builder, so the builder can use values in the config struct.
+func Register(name string, builder func() *API, config interface{}) {
+	logging.Info("Adding api builder %s", name)
+	apiBuilders[name] = builderFunc(builder)
 
-//	func init() {
-//		// register the API in the vertex server
-//		vertex.RegisterAPI(myApi)
-//	}
-func RegisterAPI(a *API) {
-	log.Printf("Adding api %s/%s", a.Name, a.Version)
-	apis = append(apis, a)
+	if config != nil {
+		registerAPIConfig(name, config)
+	}
 }
 
 // NewServer creates a new blank server to add APIs to
@@ -43,7 +47,7 @@ func NewServer(addr string) *Server {
 	}
 }
 
-// AddAPI adds an API to the server
+// AddAPI adds an API to the server manually. It's preferred to use Register in an init() function
 func (s *Server) AddAPI(a *API) {
 	a.configure(s.router)
 
@@ -61,14 +65,17 @@ func (s *Server) Handler() http.Handler {
 	return s.router
 }
 
+func (s *Server) InitAPIs() {
+	for _, builder := range apiBuilders {
+		s.AddAPI(builder())
+	}
+}
+
 // Run runs the server if it has any APIs registered on it
 func (s *Server) Run() error {
 
-	if len(s.apis)+len(apis) == 0 {
+	if len(s.apis) == 0 {
 		return errors.New("No APIs defined for server")
-	}
-	for _, a := range apis {
-		s.AddAPI(a)
 	}
 
 	// Server the console swagger UI
