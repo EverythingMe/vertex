@@ -23,7 +23,7 @@ func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}
 	return User{Id: h.Id, Name: h.Name, Banana: h.Banana}, nil
 }
 
-func testUserHandler(t *vertex.TestContext) error {
+func testUserHandler(t *vertex.TestContext) {
 
 	vals := url.Values{}
 	vals.Set("name", "foofi")
@@ -31,17 +31,16 @@ func testUserHandler(t *vertex.TestContext) error {
 
 	req, err := t.NewRequest("POST", vals, params)
 	if err != nil {
-		return err
+		t.Fail("Error performing request: %v", err)
 	}
 
 	resp := map[string]interface{}{}
-	if r, err := t.JsonRequest(req, resp); err != nil {
+	if r, err := t.JsonRequest(req, &resp); err != nil {
 		b, _ := ioutil.ReadAll(r.Body)
 		t.Log("Got response: %v", string(b))
-		return err
+		t.Fail("Error parsing json: %v", err)
 	}
 
-	return nil
 }
 
 type User struct {
@@ -91,12 +90,12 @@ func init() {
 					Path:        "/user/byId/{id}",
 					Description: "Get User Info by id or name",
 					Handler:     UserHandler{},
-					Methods:     vertex.GET,
+					Methods:     vertex.GET | vertex.POST,
 					Test:        vertex.WarningTest(testUserHandler),
 					Returns:     User{},
-					Middleware: []vertex.Middleware{
-						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
-					},
+					//					Middleware: []vertex.Middleware{
+					//						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
+					//					},
 				},
 				//			"/user/byName/{id}": {
 				//				Description: "Get User Info by id or name",

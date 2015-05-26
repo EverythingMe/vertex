@@ -3,6 +3,7 @@ package vertex
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"path"
 
@@ -12,9 +13,10 @@ import (
 
 // Server represents a multi-API http server with a single router
 type Server struct {
-	addr   string
-	apis   []*API
-	router *httprouter.Router
+	addr     string
+	apis     []*API
+	router   *httprouter.Router
+	listener net.Listener
 }
 
 type builderFunc func() *API
@@ -55,7 +57,7 @@ func (s *Server) AddAPI(a *API) {
 		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
 	}
 	fmt.Println(path.Join("/test", a.root(), ":category"))
-	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler("127.0.0.1"+s.addr))
+	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler())
 
 	s.apis = append(s.apis, a)
 }
@@ -81,5 +83,15 @@ func (s *Server) Run() error {
 	// Server the console swagger UI
 	s.router.ServeFiles("/console/*filepath", http.Dir("../console"))
 
-	return http.ListenAndServe(s.addr, s.router)
+	listener, err := net.Listen("tcp", s.addr)
+	if err != nil {
+		return fmt.Errorf("Could not listen in server: %s", err)
+	}
+	s.listener = listener
+	return http.Serve(s.listener, s.router)
+}
+
+// Stop closes the server's socket. mainly for not leaking while testing
+func (s *Server) Stop() error {
+	return s.listener.Close()
 }

@@ -44,9 +44,7 @@ func assertEqual(t *testing.T, v1, v2 interface{}, msg ...string) {
 }
 
 func TestSwagger(t *testing.T) {
-	t.SkipNow()
 	//t.SkipNow()
-
 	a := &vertex.API{
 		Name:          "testung",
 		Version:       "1.0",

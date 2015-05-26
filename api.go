@@ -205,14 +205,14 @@ func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httpr
 
 }
 
-func (a *API) testHandler(addr string) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (a *API) testHandler() func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 		w.Header().Set("Content-Type", "text/plain")
 		category := p.ByName("category")
 
-		runner := newTestRunner(w, a, addr, category)
+		runner := newTestRunner(w, a, r.Host, category)
 
 		st := time.Now()
 		runner.Run(true)

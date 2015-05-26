@@ -8,6 +8,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
+	"runtime"
 	"sync"
 	"text/tabwriter"
 	"time"
@@ -22,7 +24,7 @@ import (
 //
 // A test should fail or succeed, and can optionally write error output
 type Tester interface {
-	Test(*TestContext) error
+	Test(*TestContext)
 	Category() string
 }
 
@@ -34,12 +36,12 @@ const (
 )
 
 type testFunc struct {
-	f        func(*TestContext) error
+	f        func(*TestContext)
 	category string
 }
 
-func (f testFunc) Test(ctx *TestContext) error {
-	return f.f(ctx)
+func (f testFunc) Test(ctx *TestContext) {
+	f.f(ctx)
 }
 
 func (f testFunc) Category() string {
@@ -47,12 +49,12 @@ func (f testFunc) Category() string {
 }
 
 // CrititcalTest wraps testers to signify that the tester is considered critical
-func CriticalTest(f func(ctx *TestContext) error) Tester {
+func CriticalTest(f func(ctx *TestContext)) Tester {
 	return testFunc{f, CriticalTests}
 }
 
 // WarningTest wraps testers to signify that the tester is a warning test
-func WarningTest(f func(ctx *TestContext) error) Tester {
+func WarningTest(f func(ctx *TestContext)) Tester {
 	return testFunc{f, WarningTests}
 }
 
@@ -71,11 +73,17 @@ func (t *TestContext) Log(format string, params ...interface{}) {
 }
 
 func (t *TestContext) Fatal(format string, params ...interface{}) {
-	panic("FATAL: " + fmt.Sprintf(format, params...))
+
+	res := newTestResult(fatal, fmt.Sprintf(format, params...), 2)
+	panic(res)
 }
 
 func (t *TestContext) Skip() {
-	panic(skipped)
+	panic(newTestResult(skipped, "", 2))
+}
+
+func (t *TestContext) Fail(format string, params ...interface{}) {
+	panic(newTestResult(failed, fmt.Sprintf(format, params...), 2))
 }
 
 func (t *TestContext) ServerUrl() string {
@@ -154,38 +162,48 @@ func newTestRunner(output io.Writer, a *API, addr string, category string) *test
 
 // test status codes
 const (
+	fatal   = "FATAL"
 	skipped = "SKIP"
 	missing = "MISSING"
 	failed  = "FAIL"
 	passed  = "PASS"
 )
 
-// runTest safely runs a test and catches its output and panics
-func (t *testRunner) runTest(tc Tester, path string) (status string, err error, msgs []string) {
+type testResult struct {
+	result  string
+	message string
+	fun     string
+	file    string
+	line    int
+}
 
-	// recover from panics and analyze the input
-	defer func() {
-		e := recover()
-		if e != nil {
-			switch e {
+func (r testResult) isFailure() bool {
+	return !(r.result == passed || r.result == skipped)
+}
 
-			// t.Skip was called
-			case skipped:
-				status = skipped
-				err = nil
-				return
-			// we paniced
-			default:
-				status = failed
-				err = fmt.Errorf("%v", e)
-				return
-			}
+func newTestResult(result, message string, depth int) testResult {
+
+	ret := testResult{result: result, message: message}
+
+	if pc, file, line, ok := runtime.Caller(depth); ok {
+		ret.line = line
+		ret.file = path.Base(file)
+		f := runtime.FuncForPC(pc)
+		if f != nil {
+			ret.fun = path.Base(f.Name())
 		}
-	}()
+
+	}
+
+	return ret
+}
+
+// runTest safely runs a test and catches its output and panics
+func (t *testRunner) runTest(tc Tester, path string) (res testResult, msgs []string) {
 
 	// missing testers fail as missing
 	if tc == nil {
-		status = missing
+		res = newTestResult(missing, "", 1)
 		return
 	}
 
@@ -196,15 +214,27 @@ func (t *testRunner) runTest(tc Tester, path string) (status string, err error, 
 		messages:  make([]string, 0),
 	}
 
-	err = tc.Test(ctx)
-	if err != nil {
-		err = fmt.Errorf("ERROR: %v", err)
-		status = failed
-	} else {
-		status = passed
+	// recover from panics and analyze the input
+	defer func() {
+		msgs = ctx.messages
 
-	}
-	msgs = ctx.messages
+		e := recover()
+		if e != nil {
+
+			switch x := e.(type) {
+			case testResult:
+				res = x
+			default:
+				res = newTestResult(fatal, fmt.Sprintf("Panic handling test: %v", x), 4)
+			}
+
+		}
+		return
+	}()
+
+	tc.Test(ctx)
+	res = newTestResult(passed, "", 1)
+
 	return
 
 }
@@ -240,24 +270,27 @@ func (t *testRunner) invokeTest(path string, tc Tester, wg *sync.WaitGroup) {
 
 		fmt.Fprintf(buf, "Testing %s\t\t(category: %s)\t......\t", path, getTestCategory(tc))
 
-		var status string
-		var err error
+		var result testResult
 		var msgs []string
 
 		st := time.Now()
+
 		if tc == nil {
-			status = missing
+			result = newTestResult(missing, "", 1)
 		} else {
 			if t.shouldRun(tc) {
-				status, err, msgs = t.runTest(tc, path)
+				result, msgs = t.runTest(tc, path)
 			}
 		}
+		logging.Info("Test result for %s: %#v", path, result)
 
-		fmt.Fprintf(buf, "[%s]\t(%v)\n", status, time.Since(st))
+		fmt.Fprintf(buf, "[%s]\t(%v)\n", result.result, time.Since(st))
 
 		// Output log messages if we failed
-		if err != nil {
-			fmt.Fprintln(buf, " ", err)
+		if result.isFailure() {
+			if result.message != "" {
+				fmt.Fprintf(buf, " ERROR in %s:%d: %s\n", result.fun, result.line, result.message)
+			}
 			if msgs != nil && len(msgs) > 0 {
 				fmt.Fprintln(buf, "  Messages:")
 				for _, msg := range msgs {
