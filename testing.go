@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"runtime"
 	"sync"
@@ -60,9 +61,11 @@ func WarningTest(f func(ctx *TestContext)) Tester {
 
 type TestContext struct {
 	api       *API
-	addr      string
+	serverURl string
 	routePath string
+	category  string
 	messages  []string
+	startTime time.Time
 }
 
 func (t *TestContext) Log(format string, params ...interface{}) {
@@ -74,27 +77,27 @@ func (t *TestContext) Log(format string, params ...interface{}) {
 
 func (t *TestContext) Fatal(format string, params ...interface{}) {
 
-	res := newTestResult(fatal, fmt.Sprintf(format, params...), 2)
+	res := newTestResult(resultFatal, fmt.Sprintf(format, params...), 2, t)
 	panic(res)
 }
 
 func (t *TestContext) Skip() {
-	panic(newTestResult(skipped, "", 2))
+	panic(newTestResult(resultSkipped, "", 2, t))
 }
 
 func (t *TestContext) Fail(format string, params ...interface{}) {
-	panic(newTestResult(failed, fmt.Sprintf(format, params...), 2))
+	panic(newTestResult(resultFailed, fmt.Sprintf(format, params...), 2, t))
 }
 
 func (t *TestContext) ServerUrl() string {
-	return fmt.Sprintf("http://%s", t.addr)
+	return t.serverURl
 }
 
 // FormatUrl returns a fully formatted URL for the context's route, with all path params replaced by
 // their respective values in the pathParams map
 func (t *TestContext) FormatUrl(pathParams Params) string {
 
-	u := fmt.Sprintf("http://%s%s", t.addr, t.api.FullPath(FormatPath(t.routePath, pathParams)))
+	u := fmt.Sprintf("%s%s", t.serverURl, t.api.FullPath(FormatPath(t.routePath, pathParams)))
 
 	logging.Debug("Formatted url: %s", u)
 	return u
@@ -145,78 +148,170 @@ func (t *TestContext) JsonRequest(r *http.Request, v interface{}) (*http.Respons
 }
 
 type testRunner struct {
-	category   string
-	serverAddr string
-	api        *API
-	output     *tabwriter.Writer
+	category  string
+	serverURL string
+	api       *API
+	output    io.Writer
+	formatter resultFormatter
+}
+type resultFormatter interface {
+	format(testResult) error
 }
 
-func newTestRunner(output io.Writer, a *API, addr string, category string) *testRunner {
+const (
+	TestFormatText = "text"
+	TestFormatJson = "json"
+)
+
+type jsonResultFormatter struct {
+	encoder *json.Encoder
+	w       io.Writer
+}
+
+func newJsonResultFormatter(out io.Writer) *jsonResultFormatter {
+	return &jsonResultFormatter{
+		encoder: json.NewEncoder(out),
+		w:       out,
+	}
+}
+
+func (f jsonResultFormatter) format(r testResult) error {
+
+	if err := f.encoder.Encode(r); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type textResultFormatter struct {
+	w *tabwriter.Writer
+}
+
+func newTextResultFormatter(w io.Writer) *textResultFormatter {
+
+	return &textResultFormatter{
+		w: tabwriter.NewWriter(w, 40, 8, 0, '\t', tabwriter.DiscardEmptyColumns),
+	}
+}
+
+func (f textResultFormatter) format(result testResult) error {
+
+	if _, err := fmt.Fprintf(f.w, "- %s\t(category: %s)\t[%s]\t(%v)\n", result.Path, result.Category, result.Result, result.Duration); err != nil {
+		return err
+	}
+
+	// Output log messages if we failed
+	if result.isFailure() {
+		if result.Message != "" {
+			if _, err := fmt.Fprintf(f.w, " ERROR in %s: %s\n", result.FailPoint, result.Message); err != nil {
+				return err
+			}
+		}
+		if result.Log != nil && len(result.Log) > 0 {
+			fmt.Fprintln(f.w, "  Messages:")
+			for _, msg := range result.Log {
+				if _, err := fmt.Fprintln(f.w, "  ", msg); err != nil {
+					return err
+				}
+			}
+		}
+
+		fmt.Fprintln(f.w, "")
+
+	}
+
+	return f.w.Flush()
+}
+
+func newTestRunner(output io.Writer, a *API, serverURL string, category string, format string) *testRunner {
+
+	var formatter resultFormatter
+	switch format {
+	case TestFormatJson:
+		formatter = newJsonResultFormatter(output)
+	case TestFormatText:
+		fallthrough
+	default:
+		formatter = newTextResultFormatter(output)
+
+	}
 	return &testRunner{
-		serverAddr: addr,
-		category:   category,
-		api:        a,
-		output:     tabwriter.NewWriter(output, 20, 8, 0, '\t', tabwriter.DiscardEmptyColumns),
+		serverURL: serverURL,
+		category:  category,
+		api:       a,
+		output:    output,
+		formatter: formatter,
 	}
 }
 
 // test status codes
 const (
-	fatal   = "FATAL"
-	skipped = "SKIP"
-	missing = "MISSING"
-	failed  = "FAIL"
-	passed  = "PASS"
+	resultFatal   = "FATAL"
+	resultSkipped = "SKIP"
+	resultMissing = "MISSING"
+	resultFailed  = "FAIL"
+	resultPass    = "PASS"
 )
 
 type testResult struct {
-	result  string
-	message string
-	fun     string
-	file    string
-	line    int
+	Result    string        `json:"result"`
+	Path      string        `json:"path,omitempty"`
+	Category  string        `json:"category,omitempty"`
+	Log       []string      `json:"log,omitempty"`
+	Message   string        `json:"message,omitempty"`
+	FailPoint string        `json:"failpoint,omitempty"`
+	Duration  time.Duration `json:"duration,omitempty"`
 }
 
 func (r testResult) isFailure() bool {
-	return !(r.result == passed || r.result == skipped)
+	return !(r.Result == resultPass || r.Result == resultSkipped)
 }
 
-func newTestResult(result, message string, depth int) testResult {
+func newTestResult(result, message string, depth int, ctx *TestContext) testResult {
 
-	ret := testResult{result: result, message: message}
+	ret := testResult{
+		Path:     ctx.routePath,
+		Category: ctx.category,
+		Result:   result,
+		Message:  message,
+		Duration: time.Since(ctx.startTime),
+	}
 
-	if pc, file, line, ok := runtime.Caller(depth); ok {
-		ret.line = line
-		ret.file = path.Base(file)
-		f := runtime.FuncForPC(pc)
-		if f != nil {
-			ret.fun = path.Base(f.Name())
+	if ret.isFailure() {
+		if pc, _, line, ok := runtime.Caller(depth); ok {
+
+			f := runtime.FuncForPC(pc)
+			if f != nil {
+				ret.FailPoint = fmt.Sprintf("%s:%d", path.Base(f.Name()), line)
+			}
+
 		}
-
 	}
 
 	return ret
 }
 
 // runTest safely runs a test and catches its output and panics
-func (t *testRunner) runTest(tc Tester, path string) (res testResult, msgs []string) {
+func (t *testRunner) runTest(tc Tester, path string) (res testResult) {
 
 	// missing testers fail as missing
 	if tc == nil {
-		res = newTestResult(missing, "", 1)
+		res = newTestResult(resultMissing, "", 1, &TestContext{routePath: path, category: tc.Category(), startTime: time.Now()})
 		return
 	}
 
 	ctx := &TestContext{
 		api:       t.api,
-		addr:      t.serverAddr,
+		serverURl: t.serverURL,
 		routePath: path,
 		messages:  make([]string, 0),
+		category:  tc.Category(),
+		startTime: time.Now(),
 	}
 
 	// recover from panics and analyze the input
 	defer func() {
-		msgs = ctx.messages
 
 		e := recover()
 		if e != nil {
@@ -225,7 +320,7 @@ func (t *testRunner) runTest(tc Tester, path string) (res testResult, msgs []str
 			case testResult:
 				res = x
 			default:
-				res = newTestResult(fatal, fmt.Sprintf("Panic handling test: %v", x), 4)
+				res = newTestResult(resultFatal, fmt.Sprintf("Panic handling test: %v", x), 6, ctx)
 			}
 
 		}
@@ -233,7 +328,7 @@ func (t *testRunner) runTest(tc Tester, path string) (res testResult, msgs []str
 	}()
 
 	tc.Test(ctx)
-	res = newTestResult(passed, "", 1)
+	res = newTestResult(resultPass, "", 1, ctx)
 
 	return
 
@@ -262,72 +357,70 @@ func getTestCategory(tc Tester) string {
 }
 
 // invokeTest runs a tester and prints the output
-func (t *testRunner) invokeTest(path string, tc Tester, wg *sync.WaitGroup) {
+func (t *testRunner) invokeTest(path string, tc Tester) *testResult {
 
 	if t.shouldRun(tc) {
 
-		buf := bytes.NewBuffer(nil)
-
-		fmt.Fprintf(buf, "Testing %s\t\t(category: %s)\t......\t", path, getTestCategory(tc))
-
 		var result testResult
-		var msgs []string
-
-		st := time.Now()
-
-		if tc == nil {
-			result = newTestResult(missing, "", 1)
-		} else {
-			if t.shouldRun(tc) {
-				result, msgs = t.runTest(tc, path)
+		if tc == nil || t.shouldRun(tc) {
+			result = t.runTest(tc, path)
+			logging.Info("Test result for %s: %#v", path, result)
+			if err := t.formatter.format(result); err != nil {
+				logging.Error("Error running formatter: %s", err)
 			}
-		}
-		logging.Info("Test result for %s: %#v", path, result)
-
-		fmt.Fprintf(buf, "[%s]\t(%v)\n", result.result, time.Since(st))
-
-		// Output log messages if we failed
-		if result.isFailure() {
-			if result.message != "" {
-				fmt.Fprintf(buf, " ERROR in %s:%d: %s\n", result.fun, result.line, result.message)
-			}
-			if msgs != nil && len(msgs) > 0 {
-				fmt.Fprintln(buf, "  Messages:")
-				for _, msg := range msgs {
-					fmt.Fprintln(buf, "  ", msg)
-				}
-			}
-
-		}
-		fmt.Fprintln(buf, "")
-
-		t.output.Write(buf.Bytes())
-	}
-	//t.output.Flush()
-
-	if wg != nil {
-		wg.Done()
-	}
-}
-
-func (t *testRunner) Run(parallel bool) error {
-
-	wg := &sync.WaitGroup{}
-
-	for _, route := range t.api.Routes {
-
-		if parallel {
-			wg.Add(1)
-			go t.invokeTest(route.Path, route.Test, wg)
-		} else {
-			t.invokeTest(route.Path, route.Test, nil)
+			return &result
 		}
 
 	}
-
-	wg.Wait()
-	t.output.Flush()
 
 	return nil
+}
 
+func (t *testRunner) Run() bool {
+
+	reschan := make(chan *testResult)
+	wg := sync.WaitGroup{}
+	for _, route := range t.api.Routes {
+		wg.Add(1)
+
+		go func(route Route) {
+
+			reschan <- t.invokeTest(route.Path, route.Test)
+			wg.Done()
+		}(route)
+
+	}
+
+	go func() {
+		wg.Wait()
+		close(reschan)
+	}()
+
+	success := true
+	for res := range reschan {
+		if res == nil {
+			continue
+		}
+
+		if res.isFailure() {
+			success = false
+		}
+	}
+
+	return success
+
+}
+
+func RunCLITest(apiName, serverAddr, category, format string) bool {
+
+	builder, ok := apiBuilders[apiName]
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Error: API %s not found\n", apiName)
+		return false
+	}
+
+	a := builder()
+
+	tr := newTestRunner(os.Stdout, a, serverAddr, category, format)
+	return tr.Run()
 }

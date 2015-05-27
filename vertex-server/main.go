@@ -10,7 +10,7 @@ func init() {
 }
 func main() {
 	vertex.ReadConfigs()
-	srv := vertex.NewServer(":9947")
+	srv := vertex.NewServer(vertex.Config.Server.ListenAddr)
 	srv.InitAPIs()
 	if err := srv.Run(); err != nil {
 		panic(err)

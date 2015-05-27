@@ -1,5 +1,5 @@
 server:
-  listen: 9974
+  listen: :9947
   allow_insecure: true
 auth:
   user: foo

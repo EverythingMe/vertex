@@ -1,9 +1,11 @@
 * Incident id / error id and hide explicit errors in logs
 * https support
 * Security Schemes
-* Configuration for runner
 * Test only runner
 * Middleware:
-	* BasicAuth
-	* 
+	* JWT
+	* OAuth2
+	* Statsd
+	* Rate Limit
+	* Lockdown
 * Input sanitation - SQL/JS injection support

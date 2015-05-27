@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path"
 
-	"github.com/dvirsky/go-pylog/logging"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -32,7 +31,7 @@ var apiBuilders = map[string]builderFunc{}
 // Optionally, you can pass a pointer to a config struct, or nil if you don't need to. This way, we can read the config struct's values
 // from a unified config file BEFORE we call the builder, so the builder can use values in the config struct.
 func Register(name string, builder func() *API, config interface{}) {
-	logging.Info("Adding api builder %s", name)
+	//logging.Info("Adding api builder %s", name)
 	apiBuilders[name] = builderFunc(builder)
 
 	if config != nil {
@@ -57,7 +56,7 @@ func (s *Server) AddAPI(a *API) {
 		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
 	}
 	fmt.Println(path.Join("/test", a.root(), ":category"))
-	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler())
+	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler)
 
 	s.apis = append(s.apis, a)
 }

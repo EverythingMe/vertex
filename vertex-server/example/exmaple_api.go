@@ -12,7 +12,7 @@ import (
 )
 
 type UserHandler struct {
-	Id     string `schema:"id" required:"true" doc:"The Id Of the user" in:"path"`
+	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"path"`
 	Name   string `schema:"name" maxlen:"100" required:"true" doc:"The Name Of the user"`
 	Banana Banana `schema:"banana" required:"true"`
 }
@@ -36,9 +36,12 @@ func testUserHandler(t *vertex.TestContext) {
 
 	resp := map[string]interface{}{}
 	if r, err := t.JsonRequest(req, &resp); err != nil {
-		b, _ := ioutil.ReadAll(r.Body)
-		t.Log("Got response: %v", string(b))
-		t.Fail("Error parsing json: %v", err)
+		if r != nil && r.Body != nil {
+			b, _ := ioutil.ReadAll(r.Body)
+			t.Log("Got response: %v", string(b))
+		}
+
+		t.Fail("Error getting json: %v", err)
 	}
 
 }
@@ -88,6 +91,17 @@ func init() {
 			Routes: vertex.Routes{
 				{
 					Path:        "/user/byId/{id}",
+					Description: "Get User Info by id or name",
+					Handler:     UserHandler{},
+					Methods:     vertex.GET | vertex.POST,
+					Test:        vertex.WarningTest(testUserHandler),
+					Returns:     User{},
+					//					Middleware: []vertex.Middleware{
+					//						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
+					//					},
+				},
+				{
+					Path:        "/user/byNameNameName/{id}",
 					Description: "Get User Info by id or name",
 					Handler:     UserHandler{},
 					Methods:     vertex.GET | vertex.POST,

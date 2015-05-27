@@ -1,6 +1,7 @@
 package vertex
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -205,21 +206,26 @@ func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httpr
 
 }
 
-func (a *API) testHandler() func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+// testHandler handles the running of integration tests on the API's special testing url
+func (a *API) testHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	w.Header().Set("Content-Type", "text/plain")
+	category := p.ByName("category")
 
-		w.Header().Set("Content-Type", "text/plain")
-		category := p.ByName("category")
+	buf := bytes.NewBuffer(nil)
+	runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", r.Host), category, TestFormatText)
 
-		runner := newTestRunner(w, a, r.Host, category)
+	st := time.Now()
+	success := runner.Run()
 
-		st := time.Now()
-		runner.Run(true)
-
-		fmt.Fprintln(w, time.Since(st))
-
+	if success {
+		w.Write(buf.Bytes())
+	} else {
+		http.Error(w, buf.String(), http.StatusInternalServerError)
 	}
+
+	fmt.Fprintln(w, time.Since(st))
+
 }
 
 // ToSwagger Converts an API definition into a swagger API object for serialization
@@ -240,7 +246,6 @@ func (a API) ToSwagger(serverUrl string) *swagger.API {
 
 		p := ret.AddPath(route.Path)
 		method := ri.ToSwagger()
-		fmt.Printf("%#v\n", ri)
 
 		if route.Methods&POST == POST {
 			p["post"] = method

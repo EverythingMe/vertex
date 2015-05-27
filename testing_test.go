@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func mockTest(t *TestContext) {}
+
 var api = &API{
 	Root:          "/mock",
 	Name:          "testung",
@@ -25,7 +27,7 @@ var api = &API{
 			Description: "test",
 			Handler:     VoidHandler{},
 			Methods:     GET,
-			Test:        WarningTest(func(t *TestContext) {}),
+			Test:        WarningTest(mockTest),
 		},
 	},
 }
@@ -34,7 +36,7 @@ func TestTestContext(t *testing.T) {
 
 	tc := &TestContext{
 		api:       api,
-		addr:      "localhost:1277",
+		serverURl: "http://localhost:1277",
 		routePath: "/test",
 		messages:  []string{},
 	}
@@ -72,45 +74,80 @@ func TestTestContext(t *testing.T) {
 		tc.Fail("WAT %s", "WAT")
 	})
 
-	assert.Equal(t, res.result, failed)
-	assert.Equal(t, res.message, "WAT WAT")
-	assert.Equal(t, res.file, "testing_test.go")
-	assert.True(t, res.line > 0)
+	assert.Equal(t, res.Result, resultFailed)
+	assert.Equal(t, res.Message, "WAT WAT")
+
+	fmt.Println(res.FailPoint)
+	assert.True(t, strings.HasPrefix(res.FailPoint, "vertex.func"))
 
 	res = testResults(func() {
 		tc.Fatal("WAT %s", "WAT")
 	})
 
-	assert.Equal(t, res.result, fatal)
-	assert.Equal(t, res.message, "WAT WAT")
-	assert.Equal(t, res.file, "testing_test.go")
-	assert.True(t, res.line > 0)
+	assert.Equal(t, res.Result, resultFatal)
+	assert.Equal(t, res.Message, "WAT WAT")
+	assert.True(t, strings.HasPrefix(res.FailPoint, "vertex.func"))
 
 	res = testResults(func() {
 		tc.Skip()
 	})
 
-	assert.Equal(t, res.result, skipped)
-	assert.Equal(t, res.message, "")
-	assert.Equal(t, res.file, "testing_test.go")
-	assert.True(t, res.line > 0)
+	assert.Equal(t, res.Result, resultSkipped)
+	assert.Equal(t, res.Message, "")
+	assert.Equal(t, res.FailPoint, "")
 
 }
 
 func TestTestRunner(t *testing.T) {
 
 	outbuf := bytes.NewBuffer(nil)
-	runner := newTestRunner(outbuf, api, "127.0.0.1:9947", WarningTests)
-	err := runner.Run(false)
-	if err != nil {
-		t.Error(err)
+	runner := newTestRunner(outbuf, api, "127.0.0.1:9947", WarningTests, TestFormatText)
+	success := runner.Run()
+	if !success {
+		t.Error("Tests failed")
 	}
 
 	os := outbuf.String()
 
-	assert.True(t, strings.Contains(os, "Testing /test"))
+	assert.True(t, strings.Contains(os, "- /test"))
 	assert.True(t, strings.Contains(os, "category: warning"))
 	assert.True(t, strings.Contains(os, "[PASS]"))
 
 	fmt.Println(outbuf.String())
+}
+
+func TestTextFormatter(t *testing.T) {
+
+	buf := bytes.NewBuffer(nil)
+
+	formatter := newTextResultFormatter(buf)
+
+	res := newTestResult(resultPass, "Wat Wat", 1, &TestContext{routePath: "/foo", category: "warning"})
+
+	assert.NoError(t, formatter.format(res))
+
+	os := buf.String()
+
+	assert.True(t, strings.Contains(os, "- /foo"))
+	assert.True(t, strings.Contains(os, "category: warning"))
+	assert.True(t, strings.Contains(os, "[PASS]"))
+
+}
+
+func TestJsonFormatter(t *testing.T) {
+
+	buf := bytes.NewBuffer(nil)
+
+	formatter := newTextResultFormatter(buf)
+
+	res := newTestResult(resultPass, "Wat Wat", 1, &TestContext{routePath: "/foo", category: "warning"})
+
+	assert.NoError(t, formatter.format(res))
+
+	os := buf.String()
+
+	assert.True(t, strings.Contains(os, "- /foo"))
+	assert.True(t, strings.Contains(os, "category: warning"))
+	assert.True(t, strings.Contains(os, "[PASS]"))
+
 }
