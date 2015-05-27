@@ -6,7 +6,9 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"sync"
 
+	"github.com/hydrogen18/stoppableListener"
 	"github.com/julienschmidt/httprouter"
 )
 
@@ -16,6 +18,7 @@ type Server struct {
 	apis     []*API
 	router   *httprouter.Router
 	listener net.Listener
+	wg       sync.WaitGroup
 }
 
 type builderFunc func() *API
@@ -73,7 +76,7 @@ func (s *Server) InitAPIs() {
 }
 
 // Run runs the server if it has any APIs registered on it
-func (s *Server) Run() error {
+func (s *Server) Run() (err error) {
 
 	if len(s.apis) == 0 {
 		return errors.New("No APIs defined for server")
@@ -82,15 +85,29 @@ func (s *Server) Run() error {
 	// Server the console swagger UI
 	s.router.ServeFiles("/console/*filepath", http.Dir("../console"))
 
-	listener, err := net.Listen("tcp", s.addr)
-	if err != nil {
+	// Start a stoppable listener
+	var l net.Listener
+	if l, err = net.Listen("tcp", s.addr); err != nil {
 		return fmt.Errorf("Could not listen in server: %s", err)
 	}
-	s.listener = listener
+	if s.listener, err = stoppableListener.New(l); err != nil {
+		return fmt.Errorf("Could not start stoppable listener in server: %s", err)
+	}
+
+	s.wg.Add(1)
+	defer func() {
+		s.wg.Done()
+		// don't return an error on server stopped
+		if err == stoppableListener.StoppedError {
+			err = nil
+		}
+	}()
 	return http.Serve(s.listener, s.router)
 }
 
-// Stop closes the server's socket. mainly for not leaking while testing
-func (s *Server) Stop() error {
-	return s.listener.Close()
+// Stop waits up to a second and closes the server
+func (s *Server) Stop() {
+
+	s.listener.(*stoppableListener.StoppableListener).Stop()
+	s.wg.Wait()
 }

@@ -5,5 +5,5 @@ out
 *.a
 *.6
 *~
-vertex-server
-vertex-tester
+*/vertex-server
+*/vertex-tester

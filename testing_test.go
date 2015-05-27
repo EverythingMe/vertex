@@ -2,6 +2,7 @@ package vertex
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -119,15 +120,12 @@ func TestTestRunner(t *testing.T) {
 func TestTextFormatter(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
-
 	formatter := newTextResultFormatter(buf)
 
 	res := newTestResult(resultPass, "Wat Wat", 1, &TestContext{routePath: "/foo", category: "warning"})
-
 	assert.NoError(t, formatter.format(res))
 
 	os := buf.String()
-
 	assert.True(t, strings.Contains(os, "- /foo"))
 	assert.True(t, strings.Contains(os, "category: warning"))
 	assert.True(t, strings.Contains(os, "[PASS]"))
@@ -137,17 +135,14 @@ func TestTextFormatter(t *testing.T) {
 func TestJsonFormatter(t *testing.T) {
 
 	buf := bytes.NewBuffer(nil)
-
-	formatter := newTextResultFormatter(buf)
+	formatter := newJsonResultFormatter(buf)
 
 	res := newTestResult(resultPass, "Wat Wat", 1, &TestContext{routePath: "/foo", category: "warning"})
 
 	assert.NoError(t, formatter.format(res))
 
-	os := buf.String()
-
-	assert.True(t, strings.Contains(os, "- /foo"))
-	assert.True(t, strings.Contains(os, "category: warning"))
-	assert.True(t, strings.Contains(os, "[PASS]"))
+	var tr2 testResult
+	assert.NoError(t, json.Unmarshal(buf.Bytes(), &tr2))
+	assert.Equal(t, res, tr2)
 
 }

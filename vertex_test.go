@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -431,6 +432,22 @@ func TestErrors(t *testing.T) {
 
 }
 
-//func TestServer(t *testing.T) {
-//	l, err := net.List en("tcp", ":0")
-//}
+func TestServer(t *testing.T) {
+
+	s := NewServer(":9934")
+
+	s.AddAPI(mockAPI)
+
+	go func() {
+		if err := s.Run(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	fmt.Println("Stopping server")
+	s.Stop()
+
+	fmt.Println("Stopped server")
+
+}
