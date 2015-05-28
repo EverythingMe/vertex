@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"net/http"
 	"reflect"
 	"testing"
 
@@ -17,15 +16,15 @@ type MockHandler struct {
 }
 
 var expected = []ParamInfo{
-	{StructKey: "Int", Name: "int", Kind: reflect.Int, Required: true, Description: "integer field",
+	{StructKey: "Int", Name: "int", Kind: reflect.Int, Type: reflect.TypeOf(int(2)), Required: true, Description: "integer field",
 		HasMin: true, Min: -100, HasMax: true, Max: 100, HasDefault: true, Default: int64(4), RawDefault: "4", In: "query"},
-	{StructKey: "Float", Name: "float", Kind: reflect.Float64, Required: true, Description: "float field",
+	{StructKey: "Float", Name: "float", Kind: reflect.Float64, Type: reflect.TypeOf(float64(2)), Required: true, Description: "float field",
 		HasMin: true, Min: -100, HasMax: true, Max: 100, HasDefault: true, Default: float64(3.141), RawDefault: "3.141", In: "query"},
-	{StructKey: "Bool", Name: "bool", Kind: reflect.Bool, Required: false, Description: "bool field",
+	{StructKey: "Bool", Name: "bool", Kind: reflect.Bool, Type: reflect.TypeOf(true), Required: false, Description: "bool field",
 		HasDefault: true, Default: true, RawDefault: "true", In: "query"},
-	{StructKey: "String", Name: "string", Kind: reflect.String, Required: false, Description: "string field",
+	{StructKey: "String", Name: "string", Kind: reflect.String, Type: reflect.TypeOf("foo"), Required: false, Description: "string field",
 		HasDefault: true, Default: "WAT WAT", RawDefault: "WAT WAT", MinLength: 1, MaxLength: 4, Pattern: "^[a-zA-Z]+$", In: "query"},
-	{StructKey: "Lst", Name: "list", Kind: reflect.Slice, Required: false, Description: "string list field",
+	{StructKey: "Lst", Name: "list", Kind: reflect.Slice, Type: reflect.TypeOf([]string{}), Required: false, Description: "string list field",
 		HasDefault: true, Default: []string{"foo", "bar", "baz"}, RawDefault: "  foo, bar, baz    ", In: "query"},
 }
 
@@ -74,11 +73,11 @@ func TestRequestInfo(t *testing.T) {
 	path := "/foo/bar"
 	desc := "this is a description yo"
 	// Test failure
-	if _, err := NewRequestInfo(reflect.TypeOf(35), path, desc); err == nil {
+	if _, err := NewRequestInfo(reflect.TypeOf(35), path, desc, nil); err == nil {
 		t.Errorf("RequestInfo on non struct should fail")
 	}
 
-	ri, err := NewRequestInfo(reflect.TypeOf(MockHandler{}), path, desc)
+	ri, err := NewRequestInfo(reflect.TypeOf(MockHandler{}), path, desc, nil)
 	if err != nil {
 		t.Error(err)
 	}

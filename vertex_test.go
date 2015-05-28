@@ -58,7 +58,7 @@ func testUserHandler(t *TestContext) error {
 }
 
 func TestMiddleware(t *testing.T) {
-
+	//t.SkipNow()
 	mw1 := MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 		fmt.Fprint(w, "mw1,")
 		return next(w, r)
@@ -329,7 +329,7 @@ func TestFormatPath(t *testing.T) {
 }
 
 func TestIsHijacked(t *testing.T) {
-
+	//t.SkipNow()
 	assert.False(t, IsHijacked(nil))
 	assert.False(t, IsHijacked(errors.New("Foo")))
 	assert.True(t, IsHijacked(newErrorCode(ErrHijacked, "hijacked")))
@@ -337,7 +337,7 @@ func TestIsHijacked(t *testing.T) {
 }
 
 func TestRenderer(t *testing.T) {
-
+	//t.SkipNow()
 	r := RenderFunc(func(v interface{}, err error, w http.ResponseWriter, r *Request) error {
 		fmt.Fprintln(w, "testung")
 		return nil
@@ -380,7 +380,7 @@ apis:
 `
 
 func TestConfigs(t *testing.T) {
-
+	//t.SkipNow()
 	var apiConf = struct {
 		Foo string `yaml:"foo"`
 	}{"not baz"}
@@ -404,7 +404,7 @@ func TestConfigs(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-
+	//t.SkipNow()
 	err := NewError(errors.New("wat"))
 	if e, ok := err.(*internalError); !ok {
 		t.Fatal("returned not an internal error")
@@ -437,10 +437,30 @@ func TestErrors(t *testing.T) {
 		fmt.Println(msg)
 	}
 
+	testErr := func(err error, code int, httpCode int) {
+
+		if e, ok := err.(*internalError); !ok {
+			t.Error("returned not an internal error")
+		} else {
+			assert.Equal(t, e.Code, code)
+			hcode, _ := httpError(e)
+			assert.Equal(t, httpCode, hcode)
+		}
+
+	}
+
+	testErr(MissingParamError("foo"), ErrMissingParam, http.StatusBadRequest)
+	testErr(InvalidParamError("foo"), ErrInvalidParam, http.StatusBadRequest)
+	testErr(InvalidRequestError("sdfsd"), ErrInvalidRequest, http.StatusBadRequest)
+	testErr(UnauthorizedError("sdfsd"), ErrUnauthorized, http.StatusUnauthorized)
+	testErr(InsecureAccessDenied("sdfsd"), ErrInsecureAccessDenied, http.StatusForbidden)
+	testErr(ResourceUnavailableError("sdfsd"), ErrResourceUnavailable, http.StatusServiceUnavailable)
+	testErr(BackOffError(0), ErrBackOff, http.StatusServiceUnavailable)
+
 }
 
 func TestServer(t *testing.T) {
-
+	//t.SkipNow()
 	s := NewServer(":9934")
 
 	s.AddAPI(mockAPI)
@@ -466,7 +486,7 @@ type MockHandlerV struct {
 }
 
 func TestValidation(t *testing.T) {
-
+	//t.SkipNow()
 	req, err := http.NewRequest("GET", "http://example.com/foo?int=4&float=1.4&string=word&bool=true&list=foo&list=bar", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -545,4 +565,50 @@ func TestValidation(t *testing.T) {
 	if err = v.Validate(h, req); err == nil || err.Error() != "Value too large for float" {
 		t.Errorf("We didn't fail on max: %s", err)
 	}
+}
+
+func TestRequest(t *testing.T) {
+
+	req, err := http.NewRequest("GET", "http://example.com?callback=foo", nil)
+
+	assert.NoError(t, err)
+	req.Header.Set("X-Forwarded-For", "1.1.1.1,2.2.2.2,,,")
+	req.Header.Set("Accept-Language", "en-GB,en;q=0.8,he;q=0.6,da;q=0.4")
+	req.Header.Set("X-Forwarded-Proto", "https")
+	req.Header.Set(HeaderGeoPosition, "32.4,31.8")
+	req.Header.Set("User-Agent", "Vertex/test")
+	r := newRequest(req)
+
+	assert.True(t, r.Secure)
+	assert.Equal(t, "2.2.2.2", r.RemoteIP)
+	assert.Equal(t, "en-GB", r.Locale)
+	assert.Equal(t, "foo", r.Callback)
+	assert.Equal(t, 32.4, r.Location.Lat)
+	assert.Equal(t, 31.8, r.Location.Long)
+	assert.NotEmpty(t, r.UserAgent)
+	assert.NotEmpty(t, r.RequestId)
+
+	// Test attributes
+	r.SetAttribute("Foo", 123)
+	v, found := r.Attribute("Foo")
+	assert.True(t, found)
+	assert.Equal(t, 123, v)
+
+	// Test Secure parsing
+	req.Header.Del("X-Forwarded-Proto")
+	assert.False(t, newRequest(req).Secure)
+	req.Header.Set("X-Scheme", "https")
+	assert.True(t, newRequest(req).Secure)
+	req, _ = http.NewRequest("GET", "https://example.com?callback=foo", nil)
+	req.RequestURI = req.URL.String()
+	assert.True(t, newRequest(req).Secure)
+
+	// default locale if no header set
+	assert.Equal(t, "en-US", newRequest(req).Locale)
+
+	// try fucked up ips in XFF
+	req.Header.Set("X-Forwarded-For", "1.1.1.1,2.2.2.2,word up")
+	assert.Empty(t, newRequest(req).RemoteIP)
+	req.Header.Set("X-Real-Ip", "1.1.1.1")
+	assert.Equal(t, "1.1.1.1", newRequest(req).RemoteIP)
 }

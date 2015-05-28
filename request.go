@@ -1,7 +1,6 @@
 package vertex
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -113,9 +112,6 @@ func (r *Request) parseLocation() {
 
 // Detect if the request is secure or not, based on either TLS info or http headers/url
 func (r *Request) parseSecure() {
-	defer func() {
-		fmt.Printf("Request uri %s. secure? %v\n", r.RequestURI, r.Secure)
-	}()
 
 	if r.TLS != nil {
 		r.Secure = true
@@ -123,6 +119,7 @@ func (r *Request) parseSecure() {
 	}
 
 	if u, err := url.ParseRequestURI(r.RequestURI); err == nil {
+
 		if u.Scheme == "https" {
 			r.Secure = true
 			return
@@ -133,7 +130,7 @@ func (r *Request) parseSecure() {
 	if xfp == "" {
 		xfp = r.Header.Get("X-Scheme")
 	}
-	fmt.Println(xfp)
+
 	if xfp == "https" {
 		r.Secure = true
 	}
@@ -142,12 +139,13 @@ func (r *Request) parseSecure() {
 // wrap a new http request with a vertex request
 func newRequest(r *http.Request) *Request {
 	req := &Request{
-		Request:   r,
-		StartTime: time.Now(),
-		Locale:    DefaultLocale,
-		UserAgent: r.UserAgent(),
-		RequestId: uuid.New(),
-		Callback:  r.FormValue(CallbackParam),
+		Request:    r,
+		StartTime:  time.Now(),
+		Locale:     DefaultLocale,
+		UserAgent:  r.UserAgent(),
+		RequestId:  uuid.New(),
+		Callback:   r.FormValue(CallbackParam),
+		attributes: make(map[string]interface{}),
 	}
 
 	req.parseLocale()

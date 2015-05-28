@@ -17,6 +17,9 @@ type serverConfig struct {
 
 	// The location of the console UI html files on the local machine
 	ConsoleFilesPath string `yaml:"console_files_path"`
+
+	// Minimal logging level [DEBUG | INFO | WARN | ERROR | CRITICAL]
+	LoggingLevel string `yaml:"logging_level"`
 }
 
 // General-purpose to just protect some urls
@@ -42,6 +45,7 @@ var Config = struct {
 		ListenAddr:       ":9944",
 		AllowInsecure:    false,
 		ConsoleFilesPath: "../console",
+		LoggingLevel:     "INFO",
 	},
 
 	Auth: authConfig{

@@ -58,7 +58,7 @@ func (s *Server) AddAPI(a *API) {
 	s.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
 		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
 	}
-	fmt.Println(path.Join("/test", a.root(), ":category"))
+
 	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler)
 
 	s.apis = append(s.apis, a)
