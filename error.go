@@ -3,6 +3,10 @@ package vertex
 import (
 	"fmt"
 	"net/http"
+	"time"
+
+	"code.google.com/p/go-uuid/uuid"
+	"github.com/dvirsky/go-pylog/logging"
 )
 
 type internalError struct {
@@ -12,121 +16,183 @@ type internalError struct {
 
 const (
 	// The request succeeded
-	Ok = 1
-	// General failure
+	Ok = iota
 
-	GeneralFailure = -1
+	// General failure
+	ErrGeneralFailure
 
 	// Input validation failed
-	InvalidRequest = -14
+	ErrInvalidRequest
+
+	// Missing parameter
+	ErrMissingParam
+
+	// Invalid parameter value
+	ErrInvalidParam
 
 	// The request was denied for auth reasons
-	Unauthorized = -9
+	ErrUnauthorized
 
 	// Insecure access denied
-	InsecureAccessDenied = -10
+	ErrInsecureAccessDenied
 
 	// We do not want to server this request, the client should not retry
-	ResourceUnavailable = -1337
+	ErrResourceUnavailable
 
 	// Please back off
-	BackOff = -100
+	ErrBackOff
 
 	// Some middleware took over the request, and the renderer should not render the response
-	Hijacked = 0
+	ErrHijacked
 )
 
 // ErrorString converts an error code to a user "friendly" string
-func errorString(errorCode int) string {
-	switch errorCode {
-	case Ok:
-		return "OK"
-	case Hijacked:
-		return "Request Hijacked By Handler"
-	case GeneralFailure:
-		return "Request Failed"
-	case InvalidRequest:
-		return "Invalid/missing parameters for request"
-	case Unauthorized:
-		return "Unauthorized Request"
-	case InsecureAccessDenied:
-		return "Insecure Access Denied"
-	case ResourceUnavailable:
-		return "Resource Temporary Unavailable"
-	case BackOff:
-		return "Please Back-off and Retry in a While"
+func httpError(err error) (re int, rm string) {
 
+	if err == nil {
+		return http.StatusOK, http.StatusText(http.StatusOK)
 	}
 
-	return fmt.Sprintf("Unknown error code: %d", errorCode)
+	incidentId := uuid.New()
+	if err != Hijacked {
+		logging.Error("[%s] Error processing request: %s", incidentId, err)
+	}
+
+	statusFunc := func(i int) (int, string) {
+		return i, fmt.Sprintf("[%s] %s", incidentId, http.StatusText(i))
+	}
+
+	if e, ok := err.(*internalError); !ok {
+		return statusFunc(http.StatusInternalServerError)
+	} else {
+
+		switch e.Code {
+		case Ok:
+			return http.StatusOK, "OK"
+		case ErrHijacked:
+			return http.StatusOK, "Request Hijacked By Handler"
+		case ErrInvalidRequest:
+			return statusFunc(http.StatusBadRequest)
+		case ErrInvalidParam, ErrMissingParam:
+			return http.StatusBadRequest, e.Message
+		case ErrUnauthorized:
+			return statusFunc(http.StatusUnauthorized)
+		case ErrInsecureAccessDenied:
+			return statusFunc(http.StatusForbidden)
+		case ErrResourceUnavailable:
+			return statusFunc(http.StatusServiceUnavailable)
+		case ErrBackOff:
+			return statusFunc(http.StatusServiceUnavailable)
+		case ErrGeneralFailure:
+			fallthrough
+		default:
+			return statusFunc(http.StatusInternalServerError)
+
+		}
+	}
+
 }
 
 // A special error that should be returned when hijacking a request, taking over response rendering from the renderer
-var ErrHijacked = NewErrorCode("Request Hijacked, Do not rendere response", Hijacked)
+var Hijacked = newErrorCode(ErrHijacked, "Request Hijacked, Do not rendere response")
 
 // IsHijacked inspects an error and checks whether it represents a hijacked response
 func IsHijacked(err error) bool {
 
-	if err == ErrHijacked {
+	if err == Hijacked {
 		return true
 	}
 
 	if e, ok := err.(*internalError); !ok {
 		return false
 	} else {
-		return e.Code == Hijacked
+		return e.Code == ErrHijacked
 	}
 
 }
 
-// convert an internal error (or any other error) to an http code
-func httpCode(errorCode int) int {
-	switch errorCode {
-
-	case Ok, Hijacked:
-		return http.StatusOK
-	case GeneralFailure:
-		return http.StatusInternalServerError
-	case InvalidRequest:
-		return http.StatusBadRequest
-	case Unauthorized:
-		return http.StatusUnauthorized
-	case InsecureAccessDenied:
-		return http.StatusForbidden
-	case ResourceUnavailable:
-		return http.StatusServiceUnavailable
-	case BackOff:
-		return http.StatusServiceUnavailable
-
-	}
-
-	return http.StatusInternalServerError
-}
-
-func NewErrorCode(e string, code int) error {
+func newErrorCode(code int, msg string) error {
 
 	return &internalError{
-		Message: e,
+		Message: msg,
 		Code:    code,
 	}
 }
 
-func NewError(e string) error {
-	return NewErrorCode(e, GeneralFailure)
+func newErrorfCode(code int, format string, args ...interface{}) error {
+
+	return &internalError{
+		Message: fmt.Sprintf(format, args...),
+		Code:    code,
+	}
+}
+
+// Wrap a normal error object with an internal object
+func NewError(err error) error {
+
+	if _, ok := err.(*internalError); ok {
+		fmt.Println("NOT WRAPPING ERROR %s", err)
+		return err
+	} else {
+		return newErrorCode(ErrGeneralFailure, err.Error())
+	}
 }
 
 //Format a new web error from message
 func NewErrorf(format string, args ...interface{}) error {
 	return &internalError{
 		Message: fmt.Sprintf(format, args...),
-		Code:    -1,
+		Code:    ErrGeneralFailure,
 	}
 }
 
+// Error returns the error message of the underlying error object
 func (e *internalError) Error() string {
 	if e != nil {
-		return e.Message
+		return fmt.Sprintf("%s", e.Message)
 	}
 
 	return ""
+}
+
+// MissingParamError Returns a formatted error stating that a parameter was missing.
+//
+// NOTE: The message will be returned to the client directly
+func MissingParamError(msg string, args ...interface{}) error {
+	return newErrorfCode(ErrMissingParam, msg, args...)
+}
+
+// InvalidRequest returns an error signifying something went bad reading the request data (not the validation process).
+// This in general should not be used by APIs
+func InvalidRequestError(msg string, args ...interface{}) error {
+	return newErrorfCode(ErrInvalidRequest, msg, args...)
+}
+
+// InvalidParam returns an error signifying an invalid parameter value.
+//
+// NOTE: The error string will be returned directly to the client
+func InvalidParamError(msg string, args ...interface{}) error {
+	return newErrorfCode(ErrInvalidParam, msg, args...)
+}
+
+// Unauthorized returns an error signifying the request was not authorized, but the client may log-in and retry
+func UnauthorizedError(msg string, args ...interface{}) error {
+	return newErrorfCode(ErrUnauthorized, msg, args...)
+}
+
+// InsecureAccessDenied returns an error signifying the client has no access to the requested resource
+func InsecureAccessDenied(msg string, args ...interface{}) error {
+	return newErrorfCode(ErrInsecureAccessDenied, msg, args...)
+}
+
+// ResourceUnavailable returns an error meaning we do not want to server this request, the client should not retry
+func ResourceUnavailableError(msg string, args ...interface{}) error {
+	return newErrorfCode(ErrResourceUnavailable, msg, args...)
+}
+
+// BackOff returns a back-off error with a message formatted for the given amount of backoff time
+func BackOffError(duration time.Duration) error {
+
+	return newErrorfCode(ErrBackOff, fmt.Sprintf("Retry-Seconds: %.02f", duration.Seconds()))
+
 }

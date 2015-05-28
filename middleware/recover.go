@@ -9,7 +9,7 @@ import (
 	"gitlab.doit9.com/backend/vertex"
 )
 
-var AutoRecover = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (ret interface{}, err error) {
+var AutoRecover = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (ret interface{}, err error) {
 
 	defer func() {
 

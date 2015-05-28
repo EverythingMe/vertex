@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.doit9.com/backend/vertex/schema"
 	"gitlab.doit9.com/backend/vertex/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
@@ -43,7 +42,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		T = T.Elem()
 	}
 
-	validator := schema.NewRequestValidator(route.requestInfo)
+	validator := NewRequestValidator(route.requestInfo)
 
 	security := route.Security
 	if security == nil {
@@ -55,7 +54,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 	chain := buildChain(append(a.Middleware, route.Middleware...))
 
 	// add the handler itself as the final middleware
-	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 
 		var reqHandler RequestHandler
 		if T.Kind() == reflect.Struct {
@@ -66,9 +65,9 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		}
 
 		//read params
-		if err := parseInput(r, reqHandler, validator); err != nil {
+		if err := parseInput(r.Request, reqHandler, validator); err != nil {
 			logging.Error("Error reading input: %s", err)
-			return nil, NewErrorCode(err.Error(), InvalidRequest)
+			return nil, NewError(err)
 		}
 
 		return reqHandler.Handle(w, r)
@@ -83,15 +82,8 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 	}
 
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-		resp := &response{
-			ErrorString:    "OK",
-			ErrorCode:      1,
-			ResponseObject: nil,
-			callback:       formValueDefault(r, "callback", ""),
-		}
 
-		//sample processing time
-		st := time.Now()
+		req := newRequest(r)
 
 		r.ParseForm()
 
@@ -100,27 +92,10 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 			r.Form.Set(v.Key, v.Value)
 		}
 
-		ret, err := chain.handle(w, r)
+		ret, err := chain.handle(w, req)
 
-		et := time.Now()
-		resp.ProcessingTime = float64(et.Sub(st)) / float64(time.Millisecond)
-		resp.ResponseObject = ret
-		//handle errors if needed
-		if err != nil {
-
-			switch e := err.(type) {
-			//handle a "proper" internal API error
-			case *internalError:
-				resp.ErrorCode = e.Code
-				resp.ErrorString = e.Message
-			default:
-				resp.ErrorCode = -1
-				resp.ErrorString = err.Error()
-			}
-		}
-
-		if err != ErrHijacked {
-			if err = a.Renderer.Render(resp, w, r); err != nil {
+		if err != Hijacked {
+			if err = a.Renderer.Render(ret, err, w, req); err != nil {
 				logging.Error("Error rendering response: %s", err)
 			}
 		} else {

@@ -3,12 +3,12 @@ package vertex
 import "net/http"
 
 type Middleware interface {
-	Handle(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error)
+	Handle(w http.ResponseWriter, ctx *Request, next HandlerFunc) (interface{}, error)
 }
 
-type MiddlewareFunc func(http.ResponseWriter, *http.Request, HandlerFunc) (interface{}, error)
+type MiddlewareFunc func(http.ResponseWriter, *Request, HandlerFunc) (interface{}, error)
 
-func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 	return f(w, r, next)
 }
 
@@ -17,7 +17,7 @@ type step struct {
 	next *step
 }
 
-func (s *step) handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (s *step) handle(w http.ResponseWriter, r *Request) (interface{}, error) {
 
 	return s.mw.Handle(w, r, HandlerFunc(s.next.handle))
 }

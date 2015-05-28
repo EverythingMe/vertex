@@ -7,24 +7,16 @@ import (
 	"strings"
 
 	gorilla "github.com/gorilla/schema"
-	"gitlab.doit9.com/backend/vertex/schema"
 
 	"github.com/dvirsky/go-pylog/logging"
 )
 
-// Response wraps every response object, with an error code and processing time info.
-type response struct {
-	ErrorString    string      `json:"errorString"`
-	ErrorCode      int         `json:"errorCode"`
-	ProcessingTime float64     `json:"processingTime"`
-	RequestId      string      `json:"requestId"`
-	ResponseObject interface{} `json:"response,omitempty"`
-	//JSONp callback, if we found anything
-	callback string
-}
-
 // Headers for responses
 const (
+
+	// The POST/GET param we pass if we want a JSONP callback response
+	CallbackParam = "callback"
+
 	HeaderProcessingTime = "X-Vertex-ProcessingTime"
 	HeaderRequestId      = "X-Vertex-RequestId"
 	HeaderHost           = "X-Vertex-Host"
@@ -50,15 +42,15 @@ const (
 //
 // Supported types for automatic param mapping: string, int(32/64), float(32/64), bool, []string
 type RequestHandler interface {
-	Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
+	Handle(w http.ResponseWriter, r *Request) (interface{}, error)
 }
 
 // HandlerFunc is an adapter that allows you to register normal functions as handlers. It is used mainly by middleware
 // and should not be used in an application context
-type HandlerFunc func(http.ResponseWriter, *http.Request) (interface{}, error)
+type HandlerFunc func(http.ResponseWriter, *Request) (interface{}, error)
 
 // Handle calls the underlying function
-func (h HandlerFunc) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (h HandlerFunc) Handle(w http.ResponseWriter, r *Request) (interface{}, error) {
 	return h(w, r)
 }
 
@@ -111,10 +103,10 @@ func StaticHandler(root string, dir http.Dir) RequestHandler {
 
 	h := http.StripPrefix(root, http.FileServer(dir))
 
-	return HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+	return HandlerFunc(func(w http.ResponseWriter, r *Request) (interface{}, error) {
 
-		h.ServeHTTP(w, r)
-		return nil, ErrHijacked
+		h.ServeHTTP(w, r.Request)
+		return nil, Hijacked
 
 	})
 }
@@ -124,14 +116,14 @@ func StaticHandler(root string, dir http.Dir) RequestHandler {
 type VoidHandler struct{}
 
 // Handle does nothing :)
-func (VoidHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (VoidHandler) Handle(w http.ResponseWriter, r *Request) (interface{}, error) {
 	return nil, nil
 }
 
 // SecurityScheme is a special interface that validates a request and is outside the middleware chain.
 // An API has a default security scheme, and each route can override it
 type SecurityScheme interface {
-	Validate(r *http.Request) error
+	Validate(r *Request) error
 }
 
 // MethodFlag is used for const flags for method handling on API declaration
@@ -147,26 +139,25 @@ const (
 var schemaDecoder = gorilla.NewDecoder()
 
 // Parse the user input into a request handler struct, with input validation
-func parseInput(r *http.Request, input interface{}, validator *schema.RequestValidator) error {
+func parseInput(r *http.Request, input interface{}, validator *RequestValidator) error {
 
 	schemaDecoder.IgnoreUnknownKeys(true)
 
 	if err := r.ParseForm(); err != nil {
-		return NewErrorCode("Error parsing request data", InvalidRequest)
+		return InvalidRequestError("Error parsing request data: %s", err)
 	}
 
 	// We do not map and validate input to non-struct handlers
 	if reflect.TypeOf(input).Kind() != reflect.Func {
 
 		if err := schemaDecoder.Decode(input, r.Form); err != nil {
-			logging.Error("Error decoding schema: %s", err)
-			return NewErrorCode("Error decoding input", InvalidRequest)
+			return InvalidRequestError("Error decoding schema: %s", err)
 		}
 
 		// Validate the input based on the API spec
 		if err := validator.Validate(input, r); err != nil {
 			logging.Error("Error validating http.Request!: %s", err)
-			return NewErrorCode(err.Error(), InvalidRequest)
+			return NewError(err)
 
 		}
 
@@ -177,7 +168,7 @@ func parseInput(r *http.Request, input interface{}, validator *schema.RequestVal
 }
 
 // FormValueDefault returns the value from  a form param, with an optional default argument if the value was not set
-func formValueDefault(r *http.Request, key, def string) string {
+func formValueDefault(r *Request, key, def string) string {
 	ret := r.FormValue(key)
 	if ret == "" {
 		return def

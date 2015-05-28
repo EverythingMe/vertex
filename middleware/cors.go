@@ -8,7 +8,7 @@ import (
 
 //Access-Control-Allow-Origin
 
-var CORS = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (interface{}, error) {
+var CORS = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	return next(w, r)
 })

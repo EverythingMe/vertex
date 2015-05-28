@@ -20,18 +20,18 @@ func (b BasicAuth) requireAuth(w http.ResponseWriter) {
 	w.Write([]byte("401 Unauthorized\n"))
 }
 
-func (b BasicAuth) Handle(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (interface{}, error) {
+func (b BasicAuth) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
 	user, pass, ok := r.BasicAuth()
 	if !ok {
 		logging.Debug("No auth header, denying")
 		b.requireAuth(w)
-		return nil, vertex.ErrHijacked
+		return nil, vertex.Hijacked
 	}
 
 	if user != b.User || pass != b.Password {
 		logging.Warning("Unmatching auth: %s/%s", user, pass)
 		b.requireAuth(w)
-		return nil, vertex.ErrHijacked
+		return nil, vertex.Hijacked
 	}
 
 	return next(w, r)

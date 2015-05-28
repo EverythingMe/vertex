@@ -1,7 +1,7 @@
-package schema
+package vertex
 
 import (
-	"fmt"
+	"gitlab.doit9.com/backend/vertex/schema"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -20,11 +20,7 @@ type validator interface {
 
 // Base param validator
 type fieldValidator struct {
-	ParamInfo
-}
-
-func newValidationError(msg string, args ...interface{}) error {
-	return fmt.Errorf(msg, args...)
+	schema.ParamInfo
 }
 
 func (v *fieldValidator) Validate(field reflect.Value, r *http.Request) error {
@@ -32,8 +28,8 @@ func (v *fieldValidator) Validate(field reflect.Value, r *http.Request) error {
 	//validate required fields
 	if v.Required {
 
-		if r.FormValue(v.Name) == "" || !field.IsValid() {
-			return newValidationError("missing required param %s", v.StructKey)
+		if _, found := r.Form[v.Name]; !found || !field.IsValid() {
+			return MissingParamError("missing required param '%s'", v.Name)
 		}
 
 	}
@@ -62,7 +58,7 @@ func (v *fieldValidator) GetDefault() (interface{}, bool) {
 
 }
 
-func newFieldValidator(pi ParamInfo) *fieldValidator {
+func newFieldValidator(pi schema.ParamInfo) *fieldValidator {
 	ret := &fieldValidator{
 		ParamInfo: pi,
 	}
@@ -88,17 +84,17 @@ func (v *intValidator) Validate(field reflect.Value, r *http.Request) error {
 	i := field.Int()
 
 	if v.HasMin && i < int64(v.Min) {
-		return newValidationError("Value too small for %s", v.GetParamName())
+		return InvalidParamError("Value too small for %s", v.GetParamName())
 	}
 	if v.HasMax && i > int64(v.Max) {
-		return newValidationError("Value too large for %s", v.GetParamName())
+		return InvalidParamError("Value too large for %s", v.GetParamName())
 	}
 
 	return nil
 
 }
 
-func newIntValidator(pi ParamInfo) *intValidator {
+func newIntValidator(pi schema.ParamInfo) *intValidator {
 
 	return &intValidator{
 		fieldValidator: newFieldValidator(pi),
@@ -125,22 +121,22 @@ func (v *stringValidator) Validate(field reflect.Value, r *http.Request) error {
 	s := field.String()
 
 	if v.MaxLength > 0 && len(s) > v.MaxLength {
-		return newValidationError("%s is too long", v.GetParamName())
+		return InvalidParamError("%s is too long", v.GetParamName())
 	}
 
 	if v.MinLength > 0 && len(s) < v.MinLength {
-		return newValidationError("%s is too short", v.GetParamName())
+		return InvalidParamError("%s is too short", v.GetParamName())
 	}
 
 	if v.re != nil && !v.re.MatchString(s) {
-		return newValidationError("%s does not match regex pattern", v.GetParamName())
+		return InvalidParamError("%s does not match regex pattern", v.GetParamName())
 	}
 
 	return nil
 
 }
 
-func newStringValidator(pi ParamInfo) *stringValidator {
+func newStringValidator(pi schema.ParamInfo) *stringValidator {
 
 	ret := &stringValidator{
 		fieldValidator: newFieldValidator(pi),
@@ -178,16 +174,16 @@ func (v *floatValidator) Validate(field reflect.Value, r *http.Request) error {
 
 	f := field.Float()
 	if v.HasMin && f < v.Min {
-		return newValidationError("Value too small for %s", v.GetParamName())
+		return InvalidParamError("Value too small for %s", v.GetParamName())
 	}
 	if v.HasMax && f > v.Max {
-		return newValidationError("Value too large for %s", v.GetParamName())
+		return InvalidParamError("Value too large for %s", v.GetParamName())
 	}
 
 	return nil
 }
 
-func newFloatValidator(pi ParamInfo) *floatValidator {
+func newFloatValidator(pi schema.ParamInfo) *floatValidator {
 
 	ret := &floatValidator{
 		fieldValidator: newFieldValidator(pi),
@@ -210,7 +206,7 @@ func (v *boolValidator) Validate(field reflect.Value, r *http.Request) error {
 	return v.fieldValidator.Validate(field, r)
 }
 
-func newBoolValidator(pi ParamInfo) *boolValidator {
+func newBoolValidator(pi schema.ParamInfo) *boolValidator {
 
 	return &boolValidator{
 		fieldValidator: newFieldValidator(pi),
@@ -260,7 +256,7 @@ func (rv *RequestValidator) Validate(request interface{}, r *http.Request) error
 // This function walks the struct tags of the handler's fields and extracts validation metadata.
 //
 // You should give it the reflect type of your request handler struct
-func NewRequestValidator(ri RequestInfo) *RequestValidator {
+func NewRequestValidator(ri schema.RequestInfo) *RequestValidator {
 
 	//if the user passes a pointer we walk the actual struct
 

@@ -18,7 +18,7 @@ type UserHandler struct {
 	Name string `schema:"name" maxlen:"100" required:"true" doc:"The Name Of the user"`
 }
 
-func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (h UserHandler) Handle(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {
 
 	return fmt.Sprintf("Your name is %s and id is %s", h.Name, h.Id), nil
 }
@@ -64,7 +64,7 @@ func TestSwagger(t *testing.T) {
 				Path:        "/func/handler",
 				Description: "Test handling by a pure func",
 				Methods:     vertex.POST,
-				Handler: vertex.HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+				Handler: vertex.HandlerFunc(func(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {
 					return "WAT WAT", nil
 				}),
 			},

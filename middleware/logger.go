@@ -7,7 +7,7 @@ import (
 	"gitlab.doit9.com/backend/vertex"
 )
 
-var RequestLogger = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next vertex.HandlerFunc) (interface{}, error) {
+var RequestLogger = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
 
 	logging.Info("Handling %s %s", r.Method, r.URL.String())
 

@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"gitlab.doit9.com/backend/vertex/schema"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -23,7 +25,7 @@ type MockHandler struct {
 	Bar string `schema:"bar" required:"true"`
 }
 
-func (h MockHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (h MockHandler) Handle(w http.ResponseWriter, r *Request) (interface{}, error) {
 
 	return map[string]string{"foo": h.Foo, "bar": h.Bar}, nil
 }
@@ -32,7 +34,7 @@ const middlewareHeader = "X-Middleware-Message"
 
 func makeMockMW(header string) MiddlewareFunc {
 
-	return MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+	return MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 		w.Header().Add(middlewareHeader, header)
 		return next(w, r)
 	})
@@ -57,12 +59,12 @@ func testUserHandler(t *TestContext) error {
 
 func TestMiddleware(t *testing.T) {
 
-	mw1 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+	mw1 := MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 		fmt.Fprint(w, "mw1,")
 		return next(w, r)
 	})
 
-	mw2 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+	mw2 := MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 		fmt.Fprint(w, "mw2,")
 		if next != nil {
 			return next(w, r)
@@ -71,7 +73,7 @@ func TestMiddleware(t *testing.T) {
 
 	})
 
-	mw3 := MiddlewareFunc(func(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error) {
+	mw3 := MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 		fmt.Fprint(w, "mw3")
 
 		return nil, nil
@@ -125,7 +127,7 @@ var mockAPI = &API{
 		{
 			Path:        "/test2",
 			Description: "test2",
-			Handler: HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+			Handler: HandlerFunc(func(w http.ResponseWriter, r *Request) (interface{}, error) {
 				return map[string]string{"YO": "YO"}, nil
 			}),
 			Methods:    GET,
@@ -235,7 +237,7 @@ func TestIntegration(t *testing.T) {
 
 	u = fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/test"))
 	checkRequest(u, func(resp interface{}, hr *http.Response) {
-		assert.Equal(t, hr.StatusCode, http.StatusBadRequest)
+		assert.Equal(t, http.StatusBadRequest, hr.StatusCode)
 	})
 
 	u = fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/test2"))
@@ -330,13 +332,13 @@ func TestIsHijacked(t *testing.T) {
 
 	assert.False(t, IsHijacked(nil))
 	assert.False(t, IsHijacked(errors.New("Foo")))
-	assert.True(t, IsHijacked(NewErrorCode("hijacked", Hijacked)))
-	assert.True(t, IsHijacked(ErrHijacked))
+	assert.True(t, IsHijacked(newErrorCode(ErrHijacked, "hijacked")))
+	assert.True(t, IsHijacked(Hijacked))
 }
 
 func TestRenderer(t *testing.T) {
 
-	r := RenderFunc(func(resp *response, w http.ResponseWriter, r *http.Request) error {
+	r := RenderFunc(func(v interface{}, err error, w http.ResponseWriter, r *Request) error {
 		fmt.Fprintln(w, "testung")
 		return nil
 	}, "text/plain")
@@ -344,7 +346,7 @@ func TestRenderer(t *testing.T) {
 	assert.EqualValues(t, r.ContentTypes(), []string{"text/plain"})
 	out := httptest.NewRecorder()
 
-	err := r.Render(nil, out, nil)
+	err := r.Render(nil, nil, out, nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -356,18 +358,12 @@ func TestRenderer(t *testing.T) {
 
 	jr := JSONRenderer{}
 	out = httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "http://foo.bar?callback=foo", nil)
+	hr, _ := http.NewRequest("GET", "http://foo.bar?callback=foo", nil)
+	req := newRequest(hr)
 	req.ParseForm()
-	resp := response{
-		ErrorString:    "OK",
-		ErrorCode:      1,
-		ProcessingTime: 1,
-		RequestId:      "sfsgds",
-		ResponseObject: "ello",
-	}
 
-	assert.NoError(t, jr.Render(&resp, out, req))
-	assert.Equal(t, `"ello"`, out.Body.String())
+	assert.NoError(t, jr.Render("ello", nil, out, req))
+	assert.Equal(t, "foo(\"ello\");\n", out.Body.String())
 
 	out = httptest.NewRecorder()
 	writeError(out, "watwat")
@@ -409,32 +405,36 @@ func TestConfigs(t *testing.T) {
 
 func TestErrors(t *testing.T) {
 
-	err := NewError("wat")
+	err := NewError(errors.New("wat"))
 	if e, ok := err.(*internalError); !ok {
 		t.Fatal("returned not an internal error")
 	} else {
-		assert.Equal(t, e.Code, GeneralFailure)
+		assert.Equal(t, e.Code, ErrGeneralFailure)
 		assert.Equal(t, e.Message, "wat")
 	}
 
-	err = NewErrorCode("word", Unauthorized)
+	err = UnauthorizedError("word")
 	if e, ok := err.(*internalError); !ok {
 		t.Fatal("returned not an internal error")
 	} else {
-		assert.Equal(t, e.Code, Unauthorized)
+		assert.Equal(t, e.Code, ErrUnauthorized)
 		assert.Equal(t, e.Message, "word")
 
-		assert.Equal(t, http.StatusUnauthorized, httpCode(e.Code))
+		code, msg := httpError(e)
+		assert.Equal(t, http.StatusUnauthorized, code)
+		fmt.Println(msg)
 	}
 
 	err = NewErrorf("word %s", "dawg")
 	if e, ok := err.(*internalError); !ok {
 		t.Fatal("returned not an internal error")
 	} else {
-		assert.Equal(t, e.Code, GeneralFailure)
+		assert.Equal(t, e.Code, ErrGeneralFailure)
 		assert.Equal(t, e.Message, "word dawg")
 
-		assert.Equal(t, http.StatusInternalServerError, httpCode(e.Code))
+		code, msg := httpError(e)
+		assert.Equal(t, http.StatusInternalServerError, code)
+		fmt.Println(msg)
 	}
 
 }
@@ -455,4 +455,94 @@ func TestServer(t *testing.T) {
 
 	s.Stop()
 
+}
+
+type MockHandlerV struct {
+	Int    int      `schema:"int" required:"true" doc:"integer field" min:"-100" max:"100" default:"4"`
+	Float  float64  `schema:"float" required:"true" doc:"float field" min:"-100" max:"100" default:"3.141"`
+	Bool   bool     `schema:"bool" required:"false" doc:"bool field" default:"true"`
+	String string   `schema:"string" required:"false" doc:"string field" default:"WAT WAT" minlen:"1" maxlen:"4" pattern:"^[a-zA-Z]+$"`
+	Lst    []string `schema:"list" required:"false" doc:"string list field" default:"  foo, bar, baz    "`
+}
+
+func TestValidation(t *testing.T) {
+
+	req, err := http.NewRequest("GET", "http://example.com/foo?int=4&float=1.4&string=word&bool=true&list=foo&list=bar", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := req.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+
+	h := MockHandlerV{
+		Int:    4,
+		Float:  3.14,
+		Bool:   true,
+		Lst:    []string{"foo", "bar"},
+		String: "word",
+	}
+
+	ri, err := schema.NewRequestInfo(reflect.TypeOf(MockHandlerV{}), "/foo", "bar", nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	v := NewRequestValidator(ri)
+	if v == nil {
+		t.Fatal("nil request validator")
+	}
+
+	if err = v.Validate(h, req); err != nil {
+		t.Errorf("Failed validation: %s", err)
+	}
+
+	// fail on missing param
+	badreq, _ := http.NewRequest("GET", "http://example.com/foo?float=1.4&string=word&bool=true&list=foo&list=bar", nil)
+	badreq.ParseForm()
+	if err = v.Validate(h, badreq); err == nil {
+		t.Errorf("We didn't fail on missing int from request: %s", err)
+	}
+
+	// fail on bad string value
+	h.String = " wat" // spaces not allowed
+	if err = v.Validate(h, req); err == nil || err.Error() != "string does not match regex pattern" {
+		t.Errorf("We didn't fail on regex: %s", err)
+	}
+
+	h.String = "watwatwat" // spaces not allowed
+	if err = v.Validate(h, req); err == nil || err.Error() != "string is too long" {
+		t.Errorf("We didn't fail on maxlen: %s", err)
+	}
+
+	h.String = ""
+	if err = v.Validate(h, req); err == nil || err.Error() != "string is too short" {
+		t.Errorf("We didn't fail on minlen: %s", err)
+	}
+	h.String = "wat"
+
+	// Fail on bad int value
+	h.Int = -1000
+	if err = v.Validate(h, req); err == nil || err.Error() != "Value too small for int" {
+		t.Errorf("We didn't fail on min: %s", err)
+	}
+
+	h.Int = 1000
+	if err = v.Validate(h, req); err == nil || err.Error() != "Value too large for int" {
+		t.Errorf("We didn't fail on max: %s", err)
+	}
+
+	h.Int = 5
+
+	// Fail on bad float value
+	h.Float = -1000
+	if err = v.Validate(h, req); err == nil || err.Error() != "Value too small for float" {
+		t.Errorf("We didn't fail on min: %s", err)
+	}
+
+	h.Float = 1000
+	if err = v.Validate(h, req); err == nil || err.Error() != "Value too large for float" {
+		t.Errorf("We didn't fail on max: %s", err)
+	}
 }

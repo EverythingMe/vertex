@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	"gitlab.doit9.com/backend/vertex"
@@ -13,11 +14,11 @@ import (
 
 type UserHandler struct {
 	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"path"`
-	Name   string `schema:"name" maxlen:"100" required:"true" doc:"The Name Of the user"`
+	Name   string `schema:"name" maxlen:"100" minlen:"1" required:"true" doc:"The Name Of the user"`
 	Banana Banana `schema:"banana" required:"true"`
 }
 
-func (h UserHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error) {
+func (h UserHandler) Handle(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {
 
 	fmt.Printf("%#v\n", h)
 	return User{Id: h.Id, Name: h.Name, Banana: h.Banana}, nil
@@ -91,44 +92,31 @@ func init() {
 			Routes: vertex.Routes{
 				{
 					Path:        "/user/byId/{id}",
-					Description: "Get User Info by id or name",
+					Description: "Get User Info by id ",
 					Handler:     UserHandler{},
-					Methods:     vertex.GET | vertex.POST,
+					Methods:     vertex.GET,
 					Test:        vertex.WarningTest(testUserHandler),
 					Returns:     User{},
-					//					Middleware: []vertex.Middleware{
-					//						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
-					//					},
 				},
+
 				{
-					Path:        "/user/byNameNameName/{id}",
-					Description: "Get User Info by id or name",
+					Path:        "/user/byName/{name}",
+					Description: "Get User Info by  name",
 					Handler:     UserHandler{},
-					Methods:     vertex.GET | vertex.POST,
+					Methods:     vertex.GET,
 					Test:        vertex.WarningTest(testUserHandler),
 					Returns:     User{},
-					//					Middleware: []vertex.Middleware{
-					//						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
-					//					},
+					Middleware: []vertex.Middleware{
+						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
+					},
 				},
-				//			"/user/byName/{id}": {
-				//				Description: "Get User Info by id or name",
-				//				Handler:     UserHandler{},
-				//				Methods:     vertex.POST,
-				//				Test:        vertex.WarningTest(testUserHandler),
-				//				Returns:     User{},
-				//			},
-				//			"/test/foo": {
-				//				Description: "just for testing",
-				//				Handler:     vertex.VoidHandler,
-				//				Methods:     vertex.GET | vertex.POST,
-				//			},
-				//			"/test/bar": {
-				//				Description: "Static",
-				//				Handler:     vertex.StaticHandler(path.Join(root, "static"), http.Dir("/tmp")),
-				//				Methods:     vertex.GET,
-				//				Test:        vertex.DummyTest,
-				//			},
+
+				{
+					Path:        "/static/*filepath",
+					Description: "Static",
+					Handler:     vertex.StaticHandler(path.Join(root, "static"), http.Dir("/tmp")),
+					Methods:     vertex.GET,
+				},
 			},
 		}
 	}, &config)

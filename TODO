@@ -1,7 +1,5 @@
-* Incident id / error id and hide explicit errors in logs
 * https support
 * Security Schemes
-* Test only runner
 * Middleware:
 	* JWT
 	* OAuth2
