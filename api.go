@@ -87,6 +87,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 			ErrorString:    "OK",
 			ErrorCode:      1,
 			ResponseObject: nil,
+			callback:       formValueDefault(r, "callback", ""),
 		}
 
 		//sample processing time
@@ -152,6 +153,8 @@ func (a *API) FullPath(relpath string) string {
 	return ret
 }
 
+// configure registers the API's routes on a router. If the passed router is nil, we create a new one and return it.
+// The nil mode is used when an API is run in stand-alone mode.
 func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 
 	if router == nil {
@@ -181,7 +184,7 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 	}
 
 	// Server the API documentation swagger
-	router.GET(a.FullPath("/swagger"), a.docsHandler())
+	router.GET(a.FullPath("/swagger"), a.swaggerHandler)
 
 	// Redirect /$api/$version/console => /console?url=/$api/$version/swagger
 	uiPath := fmt.Sprintf("/console?url=%s", url.QueryEscape(a.FullPath("/swagger")))
@@ -191,18 +194,14 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 
 }
 
-func (a *API) docsHandler() func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+// swaggerHandler handles the swagger description request for the API
+func (a *API) swaggerHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	// A hander that generates html documentation of the API. Bind it to a url explicitly
-	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+	apiDesc := a.ToSwagger(r.Host)
+	b, _ := json.MarshalIndent(apiDesc, "", "  ")
 
-		apiDesc := a.ToSwagger(r.Host)
-		b, _ := json.MarshalIndent(apiDesc, "", "  ")
-
-		w.Header().Set("Content-Type", "text/json")
-		fmt.Fprintf(w, string(b))
-
-	}
+	w.Header().Set("Content-Type", "text/json")
+	fmt.Fprintf(w, string(b))
 
 }
 

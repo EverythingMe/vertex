@@ -126,7 +126,7 @@ var mockAPI = &API{
 			Path:        "/test2",
 			Description: "test2",
 			Handler: HandlerFunc(func(w http.ResponseWriter, r *http.Request) (interface{}, error) {
-				return "YO", nil
+				return map[string]string{"YO": "YO"}, nil
 			}),
 			Methods:    GET,
 			Middleware: []Middleware{makeMockMW("Private middleware")},
@@ -171,16 +171,23 @@ func TestIntegration(t *testing.T) {
 	s := httptest.NewServer(srv.Handler())
 	defer s.Close()
 
-	checkRequest := func(u string, tests ...func(r response)) {
+	checkRequest := func(u string, tests ...func(r interface{}, hr *http.Response)) {
+
 		res, err := http.Get(u)
 		if err != nil {
 			t.Errorf("Could not get response data")
 		}
 
-		resp := response{}
-		dec := json.NewDecoder(res.Body)
-		if err = dec.Decode(&resp); err != nil {
-			t.Errorf("Could not decode swagger def: %s", err)
+		resp := map[string]interface{}{}
+		if res.StatusCode == http.StatusOK {
+			dec := json.NewDecoder(res.Body)
+			if err = dec.Decode(&resp); err != nil {
+				t.Errorf("Could not decode json response def: %s. Response code:%v", err, res.Status)
+			}
+
+		} else {
+			b, _ := ioutil.ReadAll(res.Body)
+			t.Log("Response body: %s", string(b))
 		}
 
 		res.Body.Close()
@@ -194,22 +201,18 @@ func TestIntegration(t *testing.T) {
 		}
 
 		for _, f := range tests {
-			f(resp)
+			f(resp, res)
 		}
 
 	}
 
-	basicTest := func(resp response) {
-		if resp.ErrorCode != Ok {
-			t.Errorf("bad response code: %d", resp.ErrorCode)
+	basicTest := func(resp interface{}, hr *http.Response) {
+		if hr.StatusCode != http.StatusOK {
+			t.Errorf("bad response code: %d", hr.StatusCode)
 		}
 
-		if resp.ErrorString != "OK" {
-			t.Errorf("Bad response strin: %s", resp.ErrorString)
-		}
-
-		if resp.ProcessingTime <= 0 {
-			t.Errorf("Bad processing time: %v", resp.ProcessingTime)
+		if hr.Header.Get(HeaderProcessingTime) == "" {
+			t.Errorf("Bad processing time")
 		}
 
 	}
@@ -218,9 +221,9 @@ func TestIntegration(t *testing.T) {
 	u += "?foo=f&bar=b"
 	t.Log(u)
 
-	checkRequest(u, basicTest, func(resp response) {
-		if m, ok := resp.ResponseObject.(map[string]interface{}); !ok {
-			t.Errorf("Bad response type: %s", reflect.TypeOf(resp.ResponseObject))
+	checkRequest(u, basicTest, func(resp interface{}, hr *http.Response) {
+		if m, ok := resp.(map[string]interface{}); !ok {
+			t.Errorf("Bad response type: %s", reflect.TypeOf(resp))
 		} else {
 
 			if m["foo"] != "f" || m["bar"] != "b" {
@@ -231,18 +234,18 @@ func TestIntegration(t *testing.T) {
 	})
 
 	u = fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/test"))
-	checkRequest(u, func(resp response) {
-		assert.Equal(t, resp.ErrorCode, InvalidRequest)
+	checkRequest(u, func(resp interface{}, hr *http.Response) {
+		assert.Equal(t, hr.StatusCode, http.StatusBadRequest)
 	})
 
 	u = fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/test2"))
 
-	checkRequest(u, basicTest, func(resp response) {
-		if m, ok := resp.ResponseObject.(string); !ok {
-			t.Errorf("Bad response type: %s", reflect.TypeOf(resp.ResponseObject))
+	checkRequest(u, basicTest, func(resp interface{}, hr *http.Response) {
+		if m, ok := resp.(map[string]interface{}); !ok {
+			t.Errorf("Bad response type: %s", reflect.TypeOf(resp))
 		} else {
 
-			if m != "YO" {
+			if m["YO"] != "YO" {
 				t.Errorf("Bad response: %v", m)
 			}
 
@@ -250,9 +253,13 @@ func TestIntegration(t *testing.T) {
 	})
 
 	u = fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/testvoid"))
-	checkRequest(u, basicTest, func(resp response) {
-		if resp.ResponseObject != nil {
-			t.Errorf("Bad response: %s", resp.ResponseObject)
+	checkRequest(u, basicTest, func(resp interface{}, hr *http.Response) {
+		if m, ok := resp.(map[string]interface{}); !ok {
+			t.Errorf("Bad response type: %s", reflect.TypeOf(resp))
+		} else {
+			if len(m) != 0 {
+				t.Error("Expected empty map, got", m)
+			}
 		}
 	})
 	// Test integration tests
@@ -360,11 +367,11 @@ func TestRenderer(t *testing.T) {
 	}
 
 	assert.NoError(t, jr.Render(&resp, out, req))
-	assert.Equal(t, "foo({\"errorString\":\"OK\",\"errorCode\":1,\"processingTime\":1,\"requestId\":\"sfsgds\",\"response\":\"ello\"});", out.Body.String())
+	assert.Equal(t, `"ello"`, out.Body.String())
 
 	out = httptest.NewRecorder()
-	writeError(out, "watwat", "foo")
-	assert.Equal(t, `foo({"errorString":"watwat","errorCode":-1,"processingTime":0,"requestId":""});`, out.Body.String())
+	writeError(out, "watwat")
+	assert.Equal(t, "watwat\n", out.Body.String())
 
 }
 
@@ -445,9 +452,7 @@ func TestServer(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-	fmt.Println("Stopping server")
-	s.Stop()
 
-	fmt.Println("Stopped server")
+	s.Stop()
 
 }

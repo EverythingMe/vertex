@@ -3,7 +3,6 @@ package vertex
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -78,7 +77,6 @@ func TestTestContext(t *testing.T) {
 	assert.Equal(t, res.Result, resultFailed)
 	assert.Equal(t, res.Message, "WAT WAT")
 
-	fmt.Println(res.FailPoint)
 	assert.True(t, strings.HasPrefix(res.FailPoint, "vertex.func"))
 
 	res = testResults(func() {
@@ -114,7 +112,6 @@ func TestTestRunner(t *testing.T) {
 	assert.True(t, strings.Contains(os, "category: warning"))
 	assert.True(t, strings.Contains(os, "[PASS]"))
 
-	fmt.Println(outbuf.String())
 }
 
 func TestTextFormatter(t *testing.T) {

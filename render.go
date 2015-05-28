@@ -8,7 +8,8 @@ import (
 	"github.com/dvirsky/go-pylog/logging"
 )
 
-// Renderer is an interface for response renderers
+// Renderer is an interface for response renderers. A renderer gets the response object after the entire
+// middleware chain processed it, and renders it directly to the client
 type Renderer interface {
 	Render(*response, http.ResponseWriter, *http.Request) error
 	ContentTypes() []string
@@ -34,12 +35,13 @@ func (f funcRenderer) ContentTypes() []string {
 	return f.contentTypes
 }
 
+// JSONRenderer renders a response as a JSON object
 type JSONRenderer struct{}
 
 func (JSONRenderer) Render(res *response, w http.ResponseWriter, r *http.Request) error {
 
-	if err := writeResponse(w, res, formValueDefault(r, "callback", "")); err != nil {
-		writeError(w, "Error sending response", formValueDefault(r, "callback", ""))
+	if err := writeResponse(w, res); err != nil {
+		writeError(w, "Error sending response")
 	}
 
 	return nil
@@ -50,7 +52,7 @@ func (JSONRenderer) ContentTypes() []string {
 }
 
 //serialize an error string inside an object
-func writeError(w http.ResponseWriter, message string, callback string) {
+func writeError(w http.ResponseWriter, message string) {
 
 	//WriteError is called from recovery, so it must be panic proof
 	defer func() {
@@ -60,57 +62,41 @@ func writeError(w http.ResponseWriter, message string, callback string) {
 		}
 	}()
 
-	response := response{
-		ErrorCode:   -1,
-		ErrorString: message,
-	}
-
-	w.WriteHeader(http.StatusInternalServerError)
-
-	buf, e := json.Marshal(response)
-	if e == nil {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-
-		if callback != "" {
-			w.Write([]byte(fmt.Sprintf("%s(", callback)))
-		}
-
-		w.Write(buf)
-		if callback != "" {
-			w.Write([]byte(");"))
-		}
-
-	} else {
-		logging.Error("Could not marshal response object: %s", e)
-		w.Write([]byte("Error sending response!"))
-	}
+	http.Error(w, message, http.StatusInternalServerError)
 
 }
 
 //serialize a response object to JSON
-func writeResponse(w http.ResponseWriter, resp *response, callback string) error {
+func writeResponse(w http.ResponseWriter, resp *response) (err error) {
 
-	buf, e := json.Marshal(resp)
-	if e == nil {
+	buf, err := json.Marshal(resp.ResponseObject)
+	if err == nil {
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set(HeaderProcessingTime, fmt.Sprintf("%v", resp.ProcessingTime))
+		w.Header().Set(HeaderRequestId, resp.RequestId)
 		if code := httpCode(resp.ErrorCode); code != http.StatusOK {
-			fmt.Println("Writing error code", resp.ErrorCode, code)
-			w.WriteHeader(code)
+			http.Error(w, errorString(resp.ErrorCode), code)
+			return
 		}
 
-		if callback != "" {
-			w.Write([]byte(fmt.Sprintf("%s(", callback)))
+		if resp.callback != "" {
+			if _, err = fmt.Fprintf(w, "%s(", resp.callback); err != nil {
+				return
+			}
 		}
 
-		w.Write(buf)
-
-		if callback != "" {
-			w.Write([]byte(");"))
+		if _, err = w.Write(buf); err != nil {
+			return
 		}
 
-		return nil
+		if resp.callback != "" {
+			if _, err = fmt.Fprintln(w, ");"); err != nil {
+				return
+			}
+		}
+
 	}
 
-	return e
+	return
 }

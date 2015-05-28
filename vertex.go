@@ -19,7 +19,17 @@ type response struct {
 	ProcessingTime float64     `json:"processingTime"`
 	RequestId      string      `json:"requestId"`
 	ResponseObject interface{} `json:"response,omitempty"`
+	//JSONp callback, if we found anything
+	callback string
 }
+
+// Headers for responses
+const (
+	HeaderProcessingTime = "X-Vertex-ProcessingTime"
+	HeaderRequestId      = "X-Vertex-RequestId"
+	HeaderHost           = "X-Vertex-Host"
+	HeaderServerVersion  = "X-Vertex-Version"
+)
 
 // RequestHandler is the interface that request handler structs should implement.
 //
