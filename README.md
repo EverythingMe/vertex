@@ -793,18 +793,27 @@ type TestContext struct {
 }
 ```
 
+TestContext is a utility available for all testing functions, allowing them to
+easily test the current route. It is inspired by Go's testing framework.
+
+In general, a tester needs to call t.Fail(), t.Fatal() or t.Skip() to stop the
+execution of the test. A test that doesn't call either of them is considered
+passing
 
 #### func (*TestContext) Fail
 
 ```go
 func (t *TestContext) Fail(format string, params ...interface{})
 ```
+Fail aborts the test with a FAIL status, that is the normal case for failing
+tests
 
 #### func (*TestContext) Fatal
 
 ```go
 func (t *TestContext) Fatal(format string, params ...interface{})
 ```
+Fatal aborts the test with a FATAL status
 
 #### func (*TestContext) FormatUrl
 
@@ -814,35 +823,44 @@ func (t *TestContext) FormatUrl(pathParams Params) string
 FormatUrl returns a fully formatted URL for the context's route, with all path
 params replaced by their respective values in the pathParams map
 
-#### func (*TestContext) JsonRequest
+#### func (*TestContext) GetJSON
 
 ```go
-func (t *TestContext) JsonRequest(r *http.Request, v interface{}) (*http.Response, error)
+func (t *TestContext) GetJSON(r *http.Request, v interface{}) (*http.Response, error)
 ```
+GetJSON performs the given request, and tries to deserialize the response object
+to v. If we received an error or decoding is impossible, we return an error. The
+raw http response is also returned for inspection
 
 #### func (*TestContext) Log
 
 ```go
 func (t *TestContext) Log(format string, params ...interface{})
 ```
+Log writes a message to be displayed alongside the test result ONLY if the test
+failed
 
 #### func (*TestContext) NewRequest
 
 ```go
 func (t *TestContext) NewRequest(method string, values url.Values, pathParams Params) (*http.Request, error)
 ```
+NewRequest creates a new http request to the route we are testing now, with
+optional values for post/get, and optional path params
 
 #### func (*TestContext) ServerUrl
 
 ```go
 func (t *TestContext) ServerUrl() string
 ```
+ServerUrl returns the URL of the vertex server we are testing
 
 #### func (*TestContext) Skip
 
 ```go
 func (t *TestContext) Skip()
 ```
+Skip aborts the test with a SKIP status, that is considered passing
 
 #### type Tester
 

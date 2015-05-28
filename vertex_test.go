@@ -114,7 +114,7 @@ var mockAPI = &API{
 				}
 
 				m := map[string]interface{}{}
-				_, err = t.JsonRequest(req, &m)
+				_, err = t.GetJSON(req, &m)
 				if err != nil {
 					t.Fail("Failed running request %v", err)
 				}
