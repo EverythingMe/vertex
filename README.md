@@ -226,27 +226,34 @@ the user, validate the API key, etc.
 ```go
 const (
 	// The request succeeded
-	Ok = 1
+	Ok = iota
 
-	GeneralFailure = -1
+	// General failure
+	ErrGeneralFailure
 
 	// Input validation failed
-	InvalidRequest = -14
+	ErrInvalidRequest
+
+	// Missing parameter
+	ErrMissingParam
+
+	// Invalid parameter value
+	ErrInvalidParam
 
 	// The request was denied for auth reasons
-	Unauthorized = -9
+	ErrUnauthorized
 
 	// Insecure access denied
-	InsecureAccessDenied = -10
+	ErrInsecureAccessDenied
 
 	// We do not want to server this request, the client should not retry
-	ResourceUnavailable = -1337
+	ErrResourceUnavailable
 
 	// Please back off
-	BackOff = -100
+	ErrBackOff
 
 	// Some middleware took over the request, and the renderer should not render the response
-	Hijacked = 0
+	ErrHijacked
 )
 ```
 
@@ -260,10 +267,73 @@ const (
 test categories
 
 ```go
-var ErrHijacked = NewErrorCode("Request Hijacked, Do not rendere response", Hijacked)
+const (
+	TestFormatText = "text"
+	TestFormatJson = "json"
+)
+```
+
+```go
+const (
+
+	// The POST/GET param we pass if we want a JSONP callback response
+	CallbackParam = "callback"
+
+	HeaderProcessingTime = "X-Vertex-ProcessingTime"
+	HeaderRequestId      = "X-Vertex-RequestId"
+	HeaderHost           = "X-Vertex-Host"
+	HeaderServerVersion  = "X-Vertex-Version"
+)
+```
+Headers for responses
+
+```go
+const DefaultLocale = "en-US"
+```
+
+```go
+const HeaderGeoPosition = "X-LatLong"
+```
+
+```go
+var Config = struct {
+	Server     serverConfig           `yaml:"server"`
+	Auth       authConfig             `yaml:"auth"`
+	APIConfigs map[string]interface{} `yaml:"apis,flow"`
+
+	apiconfs map[string]interface{}
+}{
+	Server: serverConfig{
+		ListenAddr:       ":9944",
+		AllowInsecure:    false,
+		ConsoleFilesPath: "../console",
+		LoggingLevel:     "INFO",
+	},
+
+	Auth: authConfig{
+		User:     "vertext",
+		Password: "xetrev",
+	},
+
+	APIConfigs: make(map[string]interface{}),
+
+	apiconfs: make(map[string]interface{}),
+}
+```
+
+```go
+var Hijacked = newErrorCode(ErrHijacked, "Request Hijacked, Do not rendere response")
 ```
 A special error that should be returned when hijacking a request, taking over
 response rendering from the renderer
+
+#### func  BackOffError
+
+```go
+func BackOffError(duration time.Duration) error
+```
+BackOff returns a back-off error with a message formatted for the given amount
+of backoff time
 
 #### func  FormatPath
 
@@ -278,6 +348,32 @@ e.g.
     	FormatPath("/foo/{id}", Params{"id":"bar"})
      // Output: "/foo/bar"
 
+#### func  InsecureAccessDenied
+
+```go
+func InsecureAccessDenied(msg string, args ...interface{}) error
+```
+InsecureAccessDenied returns an error signifying the client has no access to the
+requested resource
+
+#### func  InvalidParamError
+
+```go
+func InvalidParamError(msg string, args ...interface{}) error
+```
+InvalidParam returns an error signifying an invalid parameter value.
+
+NOTE: The error string will be returned directly to the client
+
+#### func  InvalidRequestError
+
+```go
+func InvalidRequestError(msg string, args ...interface{}) error
+```
+InvalidRequest returns an error signifying something went bad reading the
+request data (not the validation process). This in general should not be used by
+APIs
+
 #### func  IsHijacked
 
 ```go
@@ -286,17 +382,22 @@ func IsHijacked(err error) bool
 IsHijacked inspects an error and checks whether it represents a hijacked
 response
 
+#### func  MissingParamError
+
+```go
+func MissingParamError(msg string, args ...interface{}) error
+```
+MissingParamError Returns a formatted error stating that a parameter was
+missing.
+
+NOTE: The message will be returned to the client directly
+
 #### func  NewError
 
 ```go
-func NewError(e string) error
+func NewError(err error) error
 ```
-
-#### func  NewErrorCode
-
-```go
-func NewErrorCode(e string, code int) error
-```
+Wrap a normal error object with an internal object
 
 #### func  NewErrorf
 
@@ -305,17 +406,49 @@ func NewErrorf(format string, args ...interface{}) error
 ```
 Format a new web error from message
 
-#### func  RegisterAPI
+#### func  ReadConfigs
 
 ```go
-func RegisterAPI(a *API)
+func ReadConfigs() error
 ```
-func init() {
 
-    // register the API in the vertex server
-    vertex.RegisterAPI(myApi)
+#### func  Register
 
-}
+```go
+func Register(name string, builder func() *API, config interface{})
+```
+Register lest you automatically add an API to the server from your module's
+init() function.
+
+name is a unique name for your API (doesn't have to match the API name exactly).
+
+builder is a func that creates the API when we are ready to start the server.
+
+Optionally, you can pass a pointer to a config struct, or nil if you don't need
+to. This way, we can read the config struct's values from a unified config file
+BEFORE we call the builder, so the builder can use values in the config struct.
+
+#### func  ResourceUnavailableError
+
+```go
+func ResourceUnavailableError(msg string, args ...interface{}) error
+```
+ResourceUnavailable returns an error meaning we do not want to server this
+request, the client should not retry
+
+#### func  RunCLITest
+
+```go
+func RunCLITest(apiName, serverAddr, category, format string) bool
+```
+
+#### func  UnauthorizedError
+
+```go
+func UnauthorizedError(msg string, args ...interface{}) error
+```
+Unauthorized returns an error signifying the request was not authorized, but the
+client may log-in and retry
 
 #### type API
 
@@ -326,10 +459,9 @@ type API struct {
 	Version               string
 	Root                  string
 	Doc                   string
-	Host                  string
 	DefaultSecurityScheme SecurityScheme
 	Renderer              Renderer
-	Routes                RouteMap
+	Routes                Routes
 	Middleware            []Middleware
 	Tests                 []Tester
 	AllowInsecure         bool
@@ -349,24 +481,17 @@ FullPath returns the calculated full versioned path inside the API of a request.
 e.g. if my API name is "myapi" and the version is 1.0, FullPath("/foo") returns
 "/myapi/1.0/foo"
 
-#### func (*API) Run
-
-```go
-func (a *API) Run(addr string) error
-```
-Run runs a single API server
-
 #### func (API) ToSwagger
 
 ```go
-func (a API) ToSwagger() *swagger.API
+func (a API) ToSwagger(serverUrl string) *swagger.API
 ```
 ToSwagger Converts an API definition into a swagger API object for serialization
 
 #### type HandlerFunc
 
 ```go
-type HandlerFunc func(http.ResponseWriter, *http.Request) (interface{}, error)
+type HandlerFunc func(http.ResponseWriter, *Request) (interface{}, error)
 ```
 
 HandlerFunc is an adapter that allows you to register normal functions as
@@ -376,7 +501,7 @@ application context
 #### func (HandlerFunc) Handle
 
 ```go
-func (h HandlerFunc) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
+func (h HandlerFunc) Handle(w http.ResponseWriter, r *Request) (interface{}, error)
 ```
 Handle calls the underlying function
 
@@ -386,6 +511,7 @@ Handle calls the underlying function
 type JSONRenderer struct{}
 ```
 
+JSONRenderer renders a response as a JSON object
 
 #### func (JSONRenderer) ContentTypes
 
@@ -396,7 +522,7 @@ func (JSONRenderer) ContentTypes() []string
 #### func (JSONRenderer) Render
 
 ```go
-func (JSONRenderer) Render(res *response, w http.ResponseWriter, r *http.Request) error
+func (JSONRenderer) Render(v interface{}, e error, w http.ResponseWriter, r *Request) error
 ```
 
 #### type MethodFlag
@@ -420,23 +546,30 @@ Method flag definitions
 
 ```go
 type Middleware interface {
-	Handle(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error)
+	Handle(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error)
 }
 ```
 
+Middleware are pre/post processors that can inspect, change, or fail the
+request. e.g. authentication, logging, etc
+
+Each middleware needs to call next(w,r) so its next-in-line middleware will
+work, or return without it if it wishes to terminate the processing chain
 
 #### type MiddlewareFunc
 
 ```go
-type MiddlewareFunc func(http.ResponseWriter, *http.Request, HandlerFunc) (interface{}, error)
+type MiddlewareFunc func(http.ResponseWriter, *Request, HandlerFunc) (interface{}, error)
 ```
 
+MiddlewareFunc is a wrapper that allows functions to act as middleware
 
 #### func (MiddlewareFunc) Handle
 
 ```go
-func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *http.Request, next HandlerFunc) (interface{}, error)
+func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error)
 ```
+Handle runs the underlying func
 
 #### type Params
 
@@ -450,25 +583,58 @@ Params are a string map for path formatting
 
 ```go
 type Renderer interface {
-	Render(*response, http.ResponseWriter, *http.Request) error
+	Render(interface{}, error, http.ResponseWriter, *Request) error
 	ContentTypes() []string
 }
 ```
 
-Renderer is an interface for response renderers
+Renderer is an interface for response renderers. A renderer gets the response
+object after the entire middleware chain processed it, and renders it directly
+to the client
 
 #### func  RenderFunc
 
 ```go
-func RenderFunc(f func(*response, http.ResponseWriter, *http.Request) error, contentTypes ...string) Renderer
+func RenderFunc(f func(interface{}, error, http.ResponseWriter, *Request) error, contentTypes ...string) Renderer
 ```
 Wrap a rendering function as an renderer
+
+#### type Request
+
+```go
+type Request struct {
+	*http.Request
+	StartTime time.Time
+	Deadline  time.Time
+	Locale    string
+	UserAgent string
+	RemoteIP  string
+	Location  struct{ Lat, Long float64 }
+	RequestId string
+	Callback  string
+	Secure    bool
+}
+```
+
+Request wraps the standard http request object with higher level contextual data
+
+#### func (*Request) Attribute
+
+```go
+func (r *Request) Attribute(key string) (interface{}, bool)
+```
+
+#### func (*Request) SetAttribute
+
+```go
+func (r *Request) SetAttribute(key string, val interface{})
+```
 
 #### type RequestHandler
 
 ```go
 type RequestHandler interface {
-	Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
+	Handle(w http.ResponseWriter, r *Request) (interface{}, error)
 }
 ```
 
@@ -507,10 +673,35 @@ NOTE: root should be the full path to the API root. so if your handler path is
 the handler is created before the API object is configured, we do not know the
 root on creation
 
+#### type RequestValidator
+
+```go
+type RequestValidator struct {
+}
+```
+
+
+#### func  NewRequestValidator
+
+```go
+func NewRequestValidator(ri schema.RequestInfo) *RequestValidator
+```
+Create new request validator for a request handler interface. This function
+walks the struct tags of the handler's fields and extracts validation metadata.
+
+You should give it the reflect type of your request handler struct
+
+#### func (*RequestValidator) Validate
+
+```go
+func (rv *RequestValidator) Validate(request interface{}, r *http.Request) error
+```
+
 #### type Route
 
 ```go
 type Route struct {
+	Path        string
 	Description string
 	Handler     RequestHandler
 	Methods     MethodFlag
@@ -524,10 +715,10 @@ type Route struct {
 Route represents a single route (path) in the API and its handler and optional
 extra middleware
 
-#### type RouteMap
+#### type Routes
 
 ```go
-type RouteMap map[string]Route
+type Routes []Route
 ```
 
 A routing map for an API
@@ -536,7 +727,7 @@ A routing map for an API
 
 ```go
 type SecurityScheme interface {
-	Validate(r *http.Request) error
+	Validate(r *Request) error
 }
 ```
 
@@ -565,7 +756,8 @@ NewServer creates a new blank server to add APIs to
 ```go
 func (s *Server) AddAPI(a *API)
 ```
-AddAPI adds an API to the server
+AddAPI adds an API to the server manually. It's preferred to use Register in an
+init() function
 
 #### func (*Server) Handler
 
@@ -574,12 +766,25 @@ func (s *Server) Handler() http.Handler
 ```
 Handler returns the underlying router, mainly for testing
 
+#### func (*Server) InitAPIs
+
+```go
+func (s *Server) InitAPIs()
+```
+
 #### func (*Server) Run
 
 ```go
-func (s *Server) Run() error
+func (s *Server) Run() (err error)
 ```
 Run runs the server if it has any APIs registered on it
+
+#### func (*Server) Stop
+
+```go
+func (s *Server) Stop()
+```
+Stop waits up to a second and closes the server
 
 #### type TestContext
 
@@ -588,6 +793,12 @@ type TestContext struct {
 }
 ```
 
+
+#### func (*TestContext) Fail
+
+```go
+func (t *TestContext) Fail(format string, params ...interface{})
+```
 
 #### func (*TestContext) Fatal
 
@@ -637,7 +848,7 @@ func (t *TestContext) Skip()
 
 ```go
 type Tester interface {
-	Test(*TestContext) error
+	Test(*TestContext)
 	Category() string
 }
 ```
@@ -653,14 +864,14 @@ A test should fail or succeed, and can optionally write error output
 #### func  CriticalTest
 
 ```go
-func CriticalTest(f func(ctx *TestContext) error) Tester
+func CriticalTest(f func(ctx *TestContext)) Tester
 ```
 CrititcalTest wraps testers to signify that the tester is considered critical
 
 #### func  WarningTest
 
 ```go
-func WarningTest(f func(ctx *TestContext) error) Tester
+func WarningTest(f func(ctx *TestContext)) Tester
 ```
 WarningTest wraps testers to signify that the tester is a warning test
 
@@ -703,6 +914,6 @@ testing, or when a middleware takes over the request completely
 #### func (VoidHandler) Handle
 
 ```go
-func (VoidHandler) Handle(w http.ResponseWriter, r *http.Request) (interface{}, error)
+func (VoidHandler) Handle(w http.ResponseWriter, r *Request) (interface{}, error)
 ```
 Handle does nothing :)

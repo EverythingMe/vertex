@@ -2,12 +2,18 @@ package vertex
 
 import "net/http"
 
+// Middleware are pre/post processors that can inspect, change, or fail the request. e.g. authentication, logging, etc
+//
+// Each middleware needs to call next(w,r) so its next-in-line middleware will work, or return without it if it wishes to
+// terminate the processing chain
 type Middleware interface {
-	Handle(w http.ResponseWriter, ctx *Request, next HandlerFunc) (interface{}, error)
+	Handle(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error)
 }
 
+// MiddlewareFunc is a wrapper that allows functions to act as middleware
 type MiddlewareFunc func(http.ResponseWriter, *Request, HandlerFunc) (interface{}, error)
 
+// Handle runs the underlying func
 func (f MiddlewareFunc) Handle(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 	return f(w, r, next)
 }
