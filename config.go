@@ -20,6 +20,9 @@ type serverConfig struct {
 
 	// Minimal logging level [DEBUG | INFO | WARN | ERROR | CRITICAL]
 	LoggingLevel string `yaml:"logging_level"`
+
+	// Disconnect idle clients after T seconds
+	ClientTimeout int `yaml:"client_timeout_sec"`
 }
 
 // General-purpose to just protect some urls
@@ -46,6 +49,7 @@ var Config = struct {
 		AllowInsecure:    false,
 		ConsoleFilesPath: "../console",
 		LoggingLevel:     "INFO",
+		ClientTimeout:    60,
 	},
 
 	Auth: authConfig{

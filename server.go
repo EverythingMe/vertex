@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/hydrogen18/stoppableListener"
 	"github.com/julienschmidt/httprouter"
@@ -90,6 +91,7 @@ func (s *Server) Run() (err error) {
 	if l, err = net.Listen("tcp", s.addr); err != nil {
 		return fmt.Errorf("Could not listen in server: %s", err)
 	}
+
 	if s.listener, err = stoppableListener.New(l); err != nil {
 		return fmt.Errorf("Could not start stoppable listener in server: %s", err)
 	}
@@ -102,7 +104,14 @@ func (s *Server) Run() (err error) {
 			err = nil
 		}
 	}()
-	return http.Serve(s.listener, s.router)
+
+	srv := http.Server{
+		Handler:      s.router,
+		ReadTimeout:  time.Duration(Config.Server.ClientTimeout) * time.Second,
+		WriteTimeout: time.Duration(Config.Server.ClientTimeout) * time.Second, // maximum duration before timing out write of the response
+	}
+	return srv.Serve(s.listener)
+
 }
 
 // Stop waits up to a second and closes the server
