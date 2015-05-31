@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"gitlab.doit9.com/backend/vertex/swagger"
+	"gitlab.doit9.com/server/vertex/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
 	"github.com/julienschmidt/httprouter"

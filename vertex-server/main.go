@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/dvirsky/go-pylog/logging"
-	"gitlab.doit9.com/backend/vertex"
-	_ "gitlab.doit9.com/backend/vertex/vertex-server/example"
+	"gitlab.doit9.com/server/vertex"
+	_ "gitlab.doit9.com/server/vertex/vertex-server/example"
 )
 
 func init() {

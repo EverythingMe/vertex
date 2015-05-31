@@ -1,5 +1,6 @@
 * https support
 * Security Schemes
+* Timeout settings
 * Middleware:
 	* JWT
 	* OAuth2

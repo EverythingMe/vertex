@@ -7,7 +7,7 @@ import (
 	"github.com/dvirsky/go-pylog/logging"
 	gorilla "github.com/gorilla/schema"
 
-	"gitlab.doit9.com/backend/vertex/schema"
+	"gitlab.doit9.com/server/vertex/schema"
 )
 
 // A routing map for an API

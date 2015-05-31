@@ -6,7 +6,7 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/backend/vertex"
+	"gitlab.doit9.com/server/vertex"
 )
 
 var AutoRecover = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (ret interface{}, err error) {

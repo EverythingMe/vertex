@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 
-	"gitlab.doit9.com/backend/vertex"
-	"gitlab.doit9.com/backend/vertex/middleware"
+	"gitlab.doit9.com/server/vertex"
+	"gitlab.doit9.com/server/vertex/middleware"
 )
 
 type UserHandler struct {
@@ -36,7 +36,7 @@ func testUserHandler(t *vertex.TestContext) {
 	}
 
 	resp := map[string]interface{}{}
-	if r, err := t.JsonRequest(req, &resp); err != nil {
+	if r, err := t.GetJSON(req, &resp); err != nil {
 		if r != nil && r.Body != nil {
 			b, _ := ioutil.ReadAll(r.Body)
 			t.Log("Got response: %v", string(b))

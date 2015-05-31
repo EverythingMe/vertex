@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.doit9.com/backend/vertex/swagger"
+	"gitlab.doit9.com/server/vertex/swagger"
 
 	"github.com/dvirsky/go-pylog/logging"
 	"github.com/mcuadros/go-jsonschema-generator"

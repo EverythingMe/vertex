@@ -1,6 +1,6 @@
 package middleware
 
-import "gitlab.doit9.com/backend/vertex"
+import "gitlab.doit9.com/server/vertex"
 
 var DefaultMiddleware = []vertex.Middleware{
 	AutoRecover,

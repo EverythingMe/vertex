@@ -5,7 +5,7 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/backend/vertex"
+	"gitlab.doit9.com/server/vertex"
 )
 
 type BasicAuth struct {

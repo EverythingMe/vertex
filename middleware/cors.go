@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"gitlab.doit9.com/backend/vertex"
+	"gitlab.doit9.com/server/vertex"
 )
 
 //Access-Control-Allow-Origin
