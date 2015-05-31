@@ -126,6 +126,12 @@ type SecurityScheme interface {
 	Validate(r *Request) error
 }
 
+type SecuritySchemeFunc func(r *Request) error
+
+func (f SecuritySchemeFunc) Validate(r *Request) error {
+	return f(r)
+}
+
 // MethodFlag is used for const flags for method handling on API declaration
 type MethodFlag int
 

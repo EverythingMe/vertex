@@ -72,7 +72,6 @@ func registerAPIConfig(name string, conf interface{}) {
 
 func ReadConfigs() error {
 
-	logging.Info("ReadING configs: %#v", &Config)
 	if err := autoflag.Load(gofigure.DefaultLoader, &Config); err != nil {
 		logging.Error("Error loading configs: %v", err)
 		return err

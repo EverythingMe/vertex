@@ -85,14 +85,33 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 		req := newRequest(r)
 
-		r.ParseForm()
+		if !a.AllowInsecure && !req.Secure {
+			http.Error(w, insecureAccessMessage, http.StatusForbidden)
+			return
+		}
 
+		r.ParseForm()
 		// Copy values from the router params to the request params
 		for _, v := range p {
 			r.Form.Set(v.Key, v.Value)
 		}
 
-		ret, err := chain.handle(w, req)
+		var ret interface{}
+		var err error
+
+		if security != nil {
+			if err = security.Validate(req); err != nil {
+				logging.Warning("Error validating security scheme: %s", err)
+
+				if e, ok := err.(*internalError); ok {
+					e.Code = ErrUnauthorized
+					err = e
+				}
+			}
+		}
+		if err == nil {
+			ret, err = chain.handle(w, req)
+		}
 
 		if err != Hijacked {
 			if err = a.Renderer.Render(ret, err, w, req); err != nil {

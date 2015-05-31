@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dvirsky/go-pylog/logging"
 	"github.com/hydrogen18/stoppableListener"
 	"github.com/julienschmidt/httprouter"
 )
@@ -95,6 +96,8 @@ func (s *Server) Run() (err error) {
 	if s.listener, err = stoppableListener.New(l); err != nil {
 		return fmt.Errorf("Could not start stoppable listener in server: %s", err)
 	}
+
+	logging.Info("Starting server on %s", s.listener.Addr().String())
 
 	s.wg.Add(1)
 	defer func() {

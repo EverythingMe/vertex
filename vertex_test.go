@@ -189,7 +189,7 @@ func TestIntegration(t *testing.T) {
 
 		} else {
 			b, _ := ioutil.ReadAll(res.Body)
-			t.Log("Response body: %s", string(b))
+			t.Logf("Response body: %s", string(b))
 		}
 
 		res.Body.Close()
@@ -304,6 +304,44 @@ func TestIntegration(t *testing.T) {
 	if !strings.Contains(string(b), "critical") {
 		t.Errorf("API tests did not contain critical")
 	}
+
+}
+
+func TestAllowInsecure(t *testing.T) {
+	mockAPI.AllowInsecure = false
+	defer func() {
+		mockAPI.AllowInsecure = true
+	}()
+
+	srv := NewServer(":9947")
+	srv.AddAPI(mockAPI)
+
+	s := httptest.NewServer(srv.Handler())
+	defer s.Close()
+
+	u := fmt.Sprintf("http://%s%s", s.Listener.Addr().String(), mockAPI.FullPath("/test2"))
+	res, err := http.Get(u)
+	if err != nil {
+		t.Errorf("Could not get response data")
+	}
+
+	if res.StatusCode != http.StatusForbidden {
+		t.Errorf("Bad status: %d", res.StatusCode)
+	}
+	b, err := ioutil.ReadAll(res.Body)
+	res.Body.Close()
+	assert.Equal(t, insecureAccessMessage+"\n", string(b))
+
+	mockAPI.AllowInsecure = true
+	if res, err = http.Get(u); err != nil {
+		t.Errorf("Could not get response data")
+	}
+
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("Bad status: %d", res.StatusCode)
+	}
+	b, err = ioutil.ReadAll(res.Body)
+	res.Body.Close()
 
 }
 

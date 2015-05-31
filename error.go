@@ -44,6 +44,8 @@ const (
 
 	// Some middleware took over the request, and the renderer should not render the response
 	ErrHijacked
+
+	insecureAccessMessage = "Insecure http Access not allowed"
 )
 
 // ErrorString converts an error code to a user "friendly" string
@@ -131,7 +133,6 @@ func newErrorfCode(code int, format string, args ...interface{}) error {
 func NewError(err error) error {
 
 	if _, ok := err.(*internalError); ok {
-		fmt.Println("NOT WRAPPING ERROR %s", err)
 		return err
 	} else {
 		return newErrorCode(ErrGeneralFailure, err.Error())

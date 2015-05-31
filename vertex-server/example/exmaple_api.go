@@ -1,7 +1,6 @@
 package example
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -19,8 +18,6 @@ type UserHandler struct {
 }
 
 func (h UserHandler) Handle(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {
-
-	fmt.Printf("%#v\n", h)
 	return User{Id: h.Id, Name: h.Name, Banana: h.Banana}, nil
 }
 
@@ -68,11 +65,20 @@ func (b Banana) UnmarshalRequestData(data string) interface{} {
 }
 
 var config = struct {
-	Foo string
-	Bar string
+	User   string `yaml:"user"`
+	Pass   string `yaml:"password"`
+	APIKey string `yaml:"api_key"`
 }{
-	Foo: "Hello",
-	Bar: "Wrold",
+	User:   "Hello",
+	Pass:   "World",
+	APIKey: "01bea5da73af5b",
+}
+
+func APIKeyValidator(r *vertex.Request) error {
+	if r.FormValue("apiKey") != config.APIKey {
+		return vertex.UnauthorizedError("Inalid API key")
+	}
+	return nil
 }
 
 func init() {
@@ -81,14 +87,15 @@ func init() {
 	vertex.Register("testung", func() *vertex.API {
 
 		return &vertex.API{
-			Name:          "testung",
-			Version:       "1.0",
-			Root:          root,
-			Doc:           "Our fancy testung API",
-			Title:         "Testung API!",
-			Middleware:    middleware.DefaultMiddleware,
-			Renderer:      vertex.JSONRenderer{},
-			AllowInsecure: true,
+			Name:                  "testung",
+			Version:               "1.0",
+			Root:                  root,
+			Doc:                   "Our fancy testung API",
+			Title:                 "Testung API!",
+			Middleware:            middleware.DefaultMiddleware,
+			Renderer:              vertex.JSONRenderer{},
+			AllowInsecure:         vertex.Config.Server.AllowInsecure,
+			DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
 			Routes: vertex.Routes{
 				{
 					Path:        "/user/byId/{id}",
@@ -107,7 +114,7 @@ func init() {
 					Test:        vertex.WarningTest(testUserHandler),
 					Returns:     User{},
 					Middleware: []vertex.Middleware{
-						middleware.BasicAuth{config.Foo, config.Bar, "Secureee"},
+						middleware.BasicAuth{config.User, config.Pass, "Secureee"},
 					},
 				},
 

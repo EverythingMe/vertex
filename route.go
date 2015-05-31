@@ -1,7 +1,6 @@
 package vertex
 
 import (
-	"fmt"
 	"reflect"
 
 	"github.com/dvirsky/go-pylog/logging"
@@ -44,7 +43,6 @@ func (r *Route) parseInfo(path string) error {
 				logging.Info("Registering unmarshaller for %#v", val)
 
 				schemaDecoder.RegisterConverter(val, gorilla.Converter(func(s string) reflect.Value {
-					fmt.Println("CONVERTING UNMARSHALER")
 					return reflect.ValueOf(unm.UnmarshalRequestData(s))
 				}))
 
