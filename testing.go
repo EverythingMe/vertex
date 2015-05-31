@@ -425,7 +425,7 @@ func (t *testRunner) Run() bool {
 
 }
 
-func RunCLITest(apiName, serverAddr, category, format string) bool {
+func RunCLITest(apiName, serverAddr, category, format string, out io.Writer) bool {
 
 	builder, ok := apiBuilders[apiName]
 	if !ok {
@@ -435,6 +435,6 @@ func RunCLITest(apiName, serverAddr, category, format string) bool {
 
 	a := builder()
 
-	tr := newTestRunner(os.Stdout, a, serverAddr, category, format)
+	tr := newTestRunner(out, a, serverAddr, category, format)
 	return tr.Run()
 }

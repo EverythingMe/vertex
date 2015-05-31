@@ -1,6 +1,7 @@
 package vertex
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -91,14 +92,15 @@ func TestMiddleware(t *testing.T) {
 }
 
 var mockAPI = &API{
-	Root:          "/mock",
-	Name:          "testung",
-	Version:       "1.0",
-	Doc:           "Our fancy testung API",
-	Title:         "Testung API!",
-	Renderer:      JSONRenderer{},
-	AllowInsecure: true,
-	Middleware:    []Middleware{makeMockMW("Global middleware")},
+	Root:                  "/mock",
+	Name:                  "testung",
+	Version:               "1.0",
+	Doc:                   "Our fancy testung API",
+	Title:                 "Testung API!",
+	Renderer:              JSONRenderer{},
+	AllowInsecure:         true,
+	Middleware:            []Middleware{makeMockMW("Global middleware")},
+	DefaultSecurityScheme: SecuritySchemeFunc(func(r *Request) error { return nil }),
 	Routes: Routes{
 		{
 			Path:        "/test",
@@ -649,4 +651,32 @@ func TestRequest(t *testing.T) {
 	assert.Empty(t, newRequest(req).RemoteIP)
 	req.Header.Set("X-Real-Ip", "1.1.1.1")
 	assert.Equal(t, "1.1.1.1", newRequest(req).RemoteIP)
+}
+
+func TestRunCLIClient(t *testing.T) {
+	srv := NewServer(":9947")
+	srv.AddAPI(mockAPI)
+
+	s := httptest.NewServer(srv.Handler())
+	defer s.Close()
+
+	builder := func() *API {
+		return mockAPI
+	}
+
+	Register("testung", builder, nil)
+
+	buf := bytes.NewBuffer(nil)
+	success := RunCLITest("testung", s.URL, AllTests, TestFormatText, buf)
+	if success != true {
+		t.Fail()
+	}
+
+	assert.Equal(t, len(mockAPI.Routes), strings.Count(buf.String(), "[PASS]"))
+
+	// test failure to find api
+	if RunCLITest("besasdasdfsdf", s.URL, AllTests, TestFormatText, buf) {
+		t.Error("shoudl have failed")
+	}
+
 }
