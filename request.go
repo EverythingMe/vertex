@@ -1,6 +1,7 @@
 package vertex
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -28,6 +29,10 @@ type Request struct {
 	Secure    bool
 
 	attributes map[string]interface{}
+}
+
+func (r *Request) String() string {
+	return fmt.Sprintf("Request/%s", r.RequestId)
 }
 
 func (r *Request) SetAttribute(key string, val interface{}) {
@@ -136,8 +141,8 @@ func (r *Request) parseSecure() {
 	}
 }
 
-// wrap a new http request with a vertex request
-func newRequest(r *http.Request) *Request {
+// NewRequest wraps a new http request with a vertex request
+func NewRequest(r *http.Request) *Request {
 	req := &Request{
 		Request:    r,
 		StartTime:  time.Now(),

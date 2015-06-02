@@ -71,6 +71,7 @@ func (s *Server) Handler() http.Handler {
 	return s.router
 }
 
+// InitAPIs initializes and adds all the APIs registered from API builders
 func (s *Server) InitAPIs() {
 	for _, builder := range apiBuilders {
 		s.AddAPI(builder())

@@ -399,7 +399,7 @@ func TestRenderer(t *testing.T) {
 	jr := JSONRenderer{}
 	out = httptest.NewRecorder()
 	hr, _ := http.NewRequest("GET", "http://foo.bar?callback=foo", nil)
-	req := newRequest(hr)
+	req := NewRequest(hr)
 	req.ParseForm()
 
 	assert.NoError(t, jr.Render("ello", nil, out, req))
@@ -617,7 +617,7 @@ func TestRequest(t *testing.T) {
 	req.Header.Set("X-Forwarded-Proto", "https")
 	req.Header.Set(HeaderGeoPosition, "32.4,31.8")
 	req.Header.Set("User-Agent", "Vertex/test")
-	r := newRequest(req)
+	r := NewRequest(req)
 
 	assert.True(t, r.Secure)
 	assert.Equal(t, "2.2.2.2", r.RemoteIP)
@@ -636,21 +636,21 @@ func TestRequest(t *testing.T) {
 
 	// Test Secure parsing
 	req.Header.Del("X-Forwarded-Proto")
-	assert.False(t, newRequest(req).Secure)
+	assert.False(t, NewRequest(req).Secure)
 	req.Header.Set("X-Scheme", "https")
-	assert.True(t, newRequest(req).Secure)
+	assert.True(t, NewRequest(req).Secure)
 	req, _ = http.NewRequest("GET", "https://example.com?callback=foo", nil)
 	req.RequestURI = req.URL.String()
-	assert.True(t, newRequest(req).Secure)
+	assert.True(t, NewRequest(req).Secure)
 
 	// default locale if no header set
-	assert.Equal(t, "en-US", newRequest(req).Locale)
+	assert.Equal(t, "en-US", NewRequest(req).Locale)
 
 	// try fucked up ips in XFF
 	req.Header.Set("X-Forwarded-For", "1.1.1.1,2.2.2.2,word up")
-	assert.Empty(t, newRequest(req).RemoteIP)
+	assert.Empty(t, NewRequest(req).RemoteIP)
 	req.Header.Set("X-Real-Ip", "1.1.1.1")
-	assert.Equal(t, "1.1.1.1", newRequest(req).RemoteIP)
+	assert.Equal(t, "1.1.1.1", NewRequest(req).RemoteIP)
 }
 
 func TestRunCLIClient(t *testing.T) {

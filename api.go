@@ -83,7 +83,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-		req := newRequest(r)
+		req := NewRequest(r)
 
 		if !a.AllowInsecure && !req.Secure {
 			http.Error(w, insecureAccessMessage, http.StatusForbidden)
