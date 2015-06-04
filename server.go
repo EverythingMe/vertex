@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -58,7 +59,9 @@ func (s *Server) AddAPI(a *API) {
 	a.configure(s.router)
 
 	s.router.PanicHandler = func(w http.ResponseWriter, r *http.Request, v interface{}) {
-		http.Error(w, fmt.Sprintf("PANIC handling request: %v", v), http.StatusInternalServerError)
+
+		code, msg := httpError(NewErrorf("Unhandled panic: %s\n%s", v, string(debug.Stack())))
+		http.Error(w, msg, code)
 	}
 
 	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler)
@@ -86,7 +89,7 @@ func (s *Server) Run() (err error) {
 	}
 
 	// Server the console swagger UI
-	s.router.ServeFiles("/console/*filepath", http.Dir("../console"))
+	s.router.ServeFiles("/console/*filepath", http.Dir(Config.Server.ConsoleFilesPath))
 
 	// Start a stoppable listener
 	var l net.Listener

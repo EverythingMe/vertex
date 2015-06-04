@@ -230,7 +230,7 @@ func (a API) ToSwagger(serverUrl string) *swagger.API {
 	if a.AllowInsecure {
 		schemes = []string{"http", "https"}
 	}
-	ret := swagger.NewAPI(serverUrl, a.Title, a.Version, a.Doc, a.FullPath(""), schemes)
+	ret := swagger.NewAPI(serverUrl, a.Title, a.Doc, a.Version, a.FullPath(""), schemes)
 	ret.Consumes = []string{"text/json"}
 	ret.Produces = a.Renderer.ContentTypes()
 	for _, route := range a.Routes {

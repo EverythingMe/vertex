@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/dvirsky/go-pylog/logging"
@@ -17,7 +16,7 @@ var AutoRecover = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Re
 		if e != nil {
 			logging.Critical("Caught panic: %v", e)
 
-			err = fmt.Errorf("PANIC handling %s: %s", r.URL.Path, e)
+			err = vertex.NewErrorf("PANIC handling %s: %s", r.URL.Path, e)
 			return
 		}
 	}()
