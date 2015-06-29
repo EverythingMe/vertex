@@ -132,6 +132,10 @@ func (f SecuritySchemeFunc) Validate(r *Request) error {
 	return f(r)
 }
 
+var NopSecurity = SecuritySchemeFunc(func(r *Request) error {
+	return nil
+})
+
 // MethodFlag is used for const flags for method handling on API declaration
 type MethodFlag int
 
