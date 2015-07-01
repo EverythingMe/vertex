@@ -84,6 +84,8 @@ type ParamInfo struct {
 
 	// Where is the param in. empty is query/body. should be set only to "path" in case of path params
 	In string
+
+	Hidden bool
 }
 
 func getTag(f reflect.StructField, key, def string) string {
@@ -159,6 +161,7 @@ func newParamInfo(field reflect.StructField) ParamInfo {
 	ret.Max, ret.HasMax = floatTag(field, MaxTag, 0)
 	ret.MaxLength, _ = intTag(field, MaxLenTag, 0)
 	ret.MinLength, _ = intTag(field, MinLenTag, 0)
+	ret.Hidden = boolTag(field, HiddenTag, false)
 
 	ret.RawDefault = getTag(field, DefaultTag, "")
 	ret.Default, ret.HasDefault = parseDefault(getTag(field, DefaultTag, ""), field.Type.Kind())
@@ -187,7 +190,9 @@ func (r RequestInfo) ToSwagger() swagger.Method {
 		ret.Parameters = make([]swagger.Param, 0)
 	}
 	for _, p := range r.Params {
-		ret.Parameters = append(ret.Parameters, p.ToSwagger())
+		if !p.Hidden {
+			ret.Parameters = append(ret.Parameters, p.ToSwagger())
+		}
 	}
 
 	if r.Returns != nil {

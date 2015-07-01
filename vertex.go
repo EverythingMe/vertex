@@ -111,6 +111,26 @@ func StaticHandler(root string, dir http.Dir) RequestHandler {
 	})
 }
 
+func Wrap(f func(w http.ResponseWriter, r *http.Request)) RequestHandler {
+
+	return HandlerFunc(func(w http.ResponseWriter, r *Request) (interface{}, error) {
+
+		f(w, r.Request)
+		return nil, Hijacked
+
+	})
+}
+
+func Hijacker(f func(w http.ResponseWriter, r *Request)) RequestHandler {
+
+	return HandlerFunc(func(w http.ResponseWriter, r *Request) (interface{}, error) {
+
+		f(w, r)
+		return nil, Hijacked
+
+	})
+}
+
 // VoidHandler is a batteries-included handler that does nothing, useful for testing, or when
 // a middleware takes over the request completely
 type VoidHandler struct{}

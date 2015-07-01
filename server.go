@@ -93,6 +93,7 @@ func (s *Server) Run() (err error) {
 
 	// Start a stoppable listener
 	var l net.Listener
+
 	if l, err = net.Listen("tcp", s.addr); err != nil {
 		return fmt.Errorf("Could not listen in server: %s", err)
 	}

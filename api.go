@@ -194,6 +194,7 @@ func (a *API) swaggerHandler(w http.ResponseWriter, r *http.Request, p httproute
 	apiDesc := a.ToSwagger(r.Host)
 	b, _ := json.MarshalIndent(apiDesc, "", "  ")
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "text/json")
 	fmt.Fprintf(w, string(b))
 
