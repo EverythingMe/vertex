@@ -311,7 +311,7 @@ func (t *testRunner) runTest(tc Tester, path string) (res testResult) {
 
 	// missing testers fail as missing
 	if tc == nil {
-		res = newTestResult(resultMissing, "", 1, &TestContext{routePath: path, category: tc.Category(), startTime: time.Now()})
+		res = newTestResult(resultMissing, "", 1, &TestContext{routePath: path, category: WarningTests, startTime: time.Now()})
 		return
 	}
 
