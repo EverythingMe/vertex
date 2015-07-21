@@ -118,6 +118,7 @@ func (r *Request) parseLocation() {
 // Detect if the request is secure or not, based on either TLS info or http headers/url
 func (r *Request) parseSecure() {
 
+	logging.Info("Parsing secure. TLS: %v, URI: %s, Headers: %#v", r.TLS, r.RequestURI, r.Header)
 	if r.TLS != nil {
 		r.Secure = true
 		return
