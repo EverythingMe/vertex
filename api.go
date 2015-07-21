@@ -86,8 +86,11 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		req := NewRequest(r)
 
 		if !a.AllowInsecure && !req.Secure {
-			http.Error(w, insecureAccessMessage, http.StatusForbidden)
-			return
+			// local requests bypass security
+			if req.RemoteIP != "127.0.0.1" {
+				http.Error(w, insecureAccessMessage, http.StatusForbidden)
+				return
+			}
 		}
 
 		r.ParseForm()
