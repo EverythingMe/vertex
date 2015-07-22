@@ -206,11 +206,19 @@ func (a *API) swaggerHandler(w http.ResponseWriter, r *http.Request, p httproute
 // testHandler handles the running of integration tests on the API's special testing url
 func (a *API) testHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
-	w.Header().Set("Content-Type", "text/plain")
 	category := p.ByName("category")
 
+	format := r.FormValue("format")
+	switch format {
+	case TestFormatJson:
+		w.Header().Set("Content-Type", "application/json")
+	default:
+		format = TestFormatText
+		w.Header().Set("Content-Type", "text/plain")
+	}
+
 	buf := bytes.NewBuffer(nil)
-	runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", r.Host), category, TestFormatText)
+	runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", r.Host), category, format)
 
 	st := time.Now()
 	success := runner.Run()

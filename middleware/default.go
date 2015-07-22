@@ -6,4 +6,5 @@ var DefaultMiddleware = []vertex.Middleware{
 	AutoRecover,
 	RequestLogger,
 	CORS,
+	&InstrumentationMiddleware{},
 }
