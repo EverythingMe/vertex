@@ -14,11 +14,12 @@ import (
 type UserHandler struct {
 	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"path"`
 	Name   string `schema:"name" maxlen:"100" minlen:"1" required:"true" doc:"The Name Of the user"`
+	Foo    int    `schema:"foo" default:"500"`
 	Banana Banana `schema:"banana" required:"true"`
 }
 
 func (h UserHandler) Handle(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {
-	return User{Id: h.Id, Name: h.Name, Banana: h.Banana}, nil
+	return User{Id: h.Id, Name: h.Name, Banana: h.Banana, Foo: h.Foo}, nil
 }
 
 func testUserHandler(t *vertex.TestContext) {
@@ -48,6 +49,7 @@ type User struct {
 	Name   string `json:"name"`
 	Id     string `json:"id"`
 	Banana Banana `json:"banana"`
+	Foo    int    `json:"foo"`
 }
 
 type Banana struct {
@@ -87,15 +89,15 @@ func init() {
 	vertex.Register("testung", func() *vertex.API {
 
 		return &vertex.API{
-			Name:                  "testung",
-			Version:               "1.0",
-			Root:                  root,
-			Doc:                   "Our fancy testung API",
-			Title:                 "Testung API!",
-			Middleware:            middleware.DefaultMiddleware,
-			Renderer:              vertex.JSONRenderer{},
-			AllowInsecure:         vertex.Config.Server.AllowInsecure,
-			DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
+			Name:          "testung",
+			Version:       "1.0",
+			Root:          root,
+			Doc:           "Our fancy testung API",
+			Title:         "Testung API!",
+			Middleware:    middleware.DefaultMiddleware,
+			Renderer:      vertex.JSONRenderer{},
+			AllowInsecure: vertex.Config.Server.AllowInsecure,
+			//DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
 			Routes: vertex.Routes{
 				{
 					Path:        "/user/byId/{id}",

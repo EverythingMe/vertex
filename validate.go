@@ -235,7 +235,7 @@ func (rv *RequestValidator) Validate(request interface{}, r *http.Request) error
 			def, ok := v.GetDefault()
 			if ok {
 				logging.Info("Default value for %s: %v", v.GetKey(), def)
-				field.Set(reflect.ValueOf(def))
+				field.Set(reflect.ValueOf(def).Convert(field.Type()))
 			}
 		}
 
