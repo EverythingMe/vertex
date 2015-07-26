@@ -66,7 +66,13 @@ func (m *CacheMiddleware) put(key string, ent *entry) {
 	m.cache.Add(key, ent)
 }
 
-// InstrumentationMiddleware is a middleware that instruments request times and success/failure rate
+// CacheMiddleware is a middleware that caches responses for requests based on their url, method and params.
+//
+// The cache uses an LRU cache with a given size, and tries to get/set resonses from and to it.
+// The url of the request and an ancoded version of request.Form (GET + POST + path params) are used as the key.
+// Headers do not play a part in the cache key.
+//
+// Note: If the request contains a "Cache-Control: no-cache" header, the middleware will be bypassed
 type CacheMiddleware struct {
 	cache *lru.Cache
 	mutex *sync.Mutex

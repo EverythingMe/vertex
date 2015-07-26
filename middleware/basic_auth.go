@@ -8,6 +8,9 @@ import (
 	"gitlab.doit9.com/server/vertex"
 )
 
+// BasicAuth is a middleware that forces basic auth user/pass authentication on requests.
+//
+// When creating the auth middleware, give it a user/pass/realm config, and this is what it will validate
 type BasicAuth struct {
 	User     string
 	Password string

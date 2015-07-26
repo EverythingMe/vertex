@@ -7,6 +7,7 @@ import (
 	"gitlab.doit9.com/server/vertex"
 )
 
+// RequestLogger is a middleware that logs the paths and return values of all requests
 var RequestLogger = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
 
 	logging.Info("Handling %s %s", r.Method, r.URL.String())

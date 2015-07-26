@@ -8,6 +8,7 @@ import (
 	"gitlab.doit9.com/server/vertex"
 )
 
+// AutoRecover is a middleware that recovers automatically from panics inside request handlers
 var AutoRecover = vertex.MiddlewareFunc(func(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (ret interface{}, err error) {
 
 	defer func() {
