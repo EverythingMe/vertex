@@ -1,0 +1,104 @@
+package middleware
+
+import (
+	"net/http"
+	"strings"
+
+	"gitlab.doit9.com/server/vertex"
+)
+
+import (
+	"errors"
+	"sync"
+	"time"
+
+	"github.com/EverythingMe/groupcache/lru"
+	"github.com/dvirsky/go-pylog/logging"
+)
+
+type entry struct {
+	value  interface{}
+	expiry time.Time
+}
+
+func newEntry(value interface{}, ttl time.Duration) *entry {
+	return &entry{
+		value,
+		time.Now().Add(ttl),
+	}
+}
+
+func NewCacheMiddleware(maxItems int, ttl time.Duration) *CacheMiddleware {
+	return &CacheMiddleware{
+		cache: lru.New(maxItems),
+		mutex: &sync.Mutex{},
+		ttl:   ttl,
+	}
+}
+
+// Get gets data saved for an URL if present in cache.
+func (m *CacheMiddleware) get(key string) (*entry, error) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	data, ok := m.cache.Get(key)
+	if !ok {
+		return nil, errors.New("not in cache")
+	}
+
+	ret, ok := data.(*entry)
+	if !ok {
+		return nil, errors.New("Invalid entry")
+	}
+
+	// This entry is expired!
+	if ret.expiry.Before(time.Now()) {
+		return nil, errors.New("Expired")
+	}
+
+	return ret, nil
+}
+
+// Put puts data of an URL in cache.
+func (m *CacheMiddleware) put(key string, ent *entry) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.cache.Add(key, ent)
+}
+
+// InstrumentationMiddleware is a middleware that instruments request times and success/failure rate
+type CacheMiddleware struct {
+	cache *lru.Cache
+	mutex *sync.Mutex
+	ttl   time.Duration
+}
+
+func (m *CacheMiddleware) requestKey(r *vertex.Request) string {
+
+	return r.Method + "/" + r.Request.URL.Path + "::" + r.Form.Encode()
+
+}
+
+func (m *CacheMiddleware) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
+
+	// Do not act on request if they have no-cache header
+	if strings.ToLower(r.Header.Get("Cache-Control")) == "no-cache" {
+		return next(w, r)
+	}
+
+	key := m.requestKey(r)
+	logging.Debug("CACHING KEY: %s", key)
+	entry, err := m.get(key)
+	if err == nil && entry != nil {
+		logging.Info("Fetched cache response: %#v", entry.value)
+		return entry.value, nil
+	}
+
+	v, err := next(w, r)
+	if err == nil {
+		m.put(key, newEntry(v, m.ttl))
+	}
+
+	return v, err
+
+}
