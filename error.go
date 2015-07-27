@@ -186,7 +186,7 @@ func InsecureAccessDenied(msg string, args ...interface{}) error {
 	return newErrorfCode(ErrInsecureAccessDenied, msg, args...)
 }
 
-// ResourceUnavailable returns an error meaning we do not want to server this request, the client should not retry
+// ResourceUnavailable returns an error meaning we do not want to serve this request, the client should not retry
 func ResourceUnavailableError(msg string, args ...interface{}) error {
 	return newErrorfCode(ErrResourceUnavailable, msg, args...)
 }
