@@ -14,6 +14,7 @@ import (
 
 	"gitlab.doit9.com/server/vertex/swagger"
 
+	"github.com/alecthomas/jsonschema"
 	"github.com/dvirsky/go-pylog/logging"
 	"github.com/julienschmidt/httprouter"
 )
@@ -252,6 +253,20 @@ func (a API) ToSwagger(serverUrl string) *swagger.API {
 		p := ret.AddPath(route.Path)
 		method := ri.ToSwagger()
 
+		for rk, resp := range method.Responses {
+
+			if resp.Schema != nil && resp.Schema.Definitions != nil {
+				for k, v := range resp.Schema.Definitions {
+					ret.Definitions[k] = swagger.Schema(&jsonschema.Schema{Type: v})
+
+				}
+
+				resp.Schema.Definitions = nil
+
+				method.Responses[rk] = resp
+			}
+
+		}
 		if route.Methods&POST == POST {
 			p["post"] = method
 		}

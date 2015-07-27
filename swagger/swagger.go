@@ -1,7 +1,8 @@
 package swagger
 
 import (
-	"github.com/mcuadros/go-jsonschema-generator"
+	"github.com/alecthomas/jsonschema"
+
 	"reflect"
 )
 
@@ -19,7 +20,7 @@ const (
 	Object  Type = "object"
 )
 
-func TypeOf(t reflect.Kind) Type {
+func TypeOf(t reflect.Kind, defaultType Type) Type {
 	switch t {
 	case reflect.Bool:
 		return Boolean
@@ -33,7 +34,7 @@ func TypeOf(t reflect.Kind) Type {
 	case reflect.Array, reflect.Slice:
 		return Array
 	default:
-		return Object
+		return defaultType
 	}
 }
 
@@ -67,21 +68,21 @@ type Param struct {
 	Required    bool   `json:"required"`
 	Type        Type   `json:"type"`
 
-	Format    string   `json:"format,omitempty"`
-	Default   string   `json:"default,omitempty"`
-	Max       float64  `json:"maximum,omitempty"`
-	HasMax    bool     `json:"-"`
-	Min       float64  `json:"minimum,omitempty"`
-	HasMin    bool     `json:"-"`
-	MaxLength int      `json:"maxLength,omitempty"`
-	MinLength int      `json:"minLength,omitempty"`
-	Pattern   string   `json:"pattern,omitempty"`
-	Enum      []string `json:"enum,omitempty"`
-	In        string   `json:"in"`
+	Format    string      `json:"format,omitempty"`
+	Default   interface{} `json:"default,omitempty"`
+	Max       float64     `json:"maximum,omitempty"`
+	HasMax    bool        `json:"-"`
+	Min       float64     `json:"minimum,omitempty"`
+	HasMin    bool        `json:"-"`
+	MaxLength int         `json:"maxLength,omitempty"`
+	MinLength int         `json:"minLength,omitempty"`
+	Pattern   string      `json:"pattern,omitempty"`
+	Enum      []string    `json:"enum,omitempty"`
+	In        string      `json:"in"`
 }
 
 // Schema is a generic jsonschema definition - TBD how we want to represent it
-type Schema jsonschema.Document
+type Schema *jsonschema.Schema
 
 // Response describes a response schema
 type Response struct {
@@ -126,6 +127,7 @@ func NewAPI(host, title, description, version, basePath string, schemes []string
 		SwaggerVersion: SwaggerVersion,
 		Paths:          make(map[string]Path),
 		Schemes:        schemes,
+		Definitions:    make(map[string]Schema),
 	}
 }
 

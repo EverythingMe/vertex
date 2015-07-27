@@ -12,7 +12,7 @@ import (
 )
 
 type UserHandler struct {
-	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"path"`
+	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"query"`
 	Name   string `schema:"name" maxlen:"100" minlen:"1" required:"true" doc:"The Name Of the user"`
 	Foo    int    `schema:"foo" default:"500"`
 	Banana Banana `schema:"banana" required:"true"`

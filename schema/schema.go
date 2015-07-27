@@ -8,8 +8,8 @@ import (
 
 	"gitlab.doit9.com/server/vertex/swagger"
 
+	"github.com/alecthomas/jsonschema"
 	"github.com/dvirsky/go-pylog/logging"
-	"github.com/mcuadros/go-jsonschema-generator"
 )
 
 // Struct field definitions
@@ -197,16 +197,15 @@ func (r RequestInfo) ToSwagger() swagger.Method {
 
 	if r.Returns != nil {
 
-		s := &jsonschema.Document{}
-		s.Read(r.Returns)
+		s := jsonschema.Reflect(r.Returns)
 
 		ret.Responses["default"] = swagger.Response{
 			Description: reflect.TypeOf(r.Returns).String(),
-			Schema:      swagger.Schema(*s),
+			Schema:      swagger.Schema(s),
 		}
 
 	} else {
-		ret.Responses["default"] = swagger.Response{"", swagger.Schema{}}
+		ret.Responses["default"] = swagger.Response{"", jsonschema.Reflect("")}
 
 	}
 
@@ -297,10 +296,10 @@ func (p ParamInfo) ToSwagger() swagger.Param {
 	return swagger.Param{
 		Name:        p.Name,
 		Description: p.Description,
-		Type:        swagger.TypeOf(p.Kind),
+		Type:        swagger.TypeOf(p.Kind, swagger.String),
 		Required:    p.Required,
 		Format:      p.Format,
-		Default:     p.RawDefault,
+		Default:     p.Default,
 		Max:         p.Max,
 		Min:         p.Min,
 		MaxLength:   p.MaxLength,
