@@ -18,16 +18,12 @@ func (i *InstrumentationMiddleware) Handle(w http.ResponseWriter, r *vertex.Requ
 
 	var v interface{}
 	var err error
-	defer instrument.SampleTime(p)()
 
-	v, err = next(w, r)
-	if err != nil {
-		p = p + ".failure"
-	} else {
-		p = p + ".success"
-	}
+	instrument.Profile(p, func() error {
+		v, err = next(w, r)
+		return err
+	})
 
-	instrument.Hit(p)
 	return v, err
 
 }

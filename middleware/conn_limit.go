@@ -1,10 +1,14 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
+	"os"
 	"sync/atomic"
+	"time"
 
 	"github.com/dvirsky/go-pylog/logging"
+	"gitlab.doit9.com/backend/instrument"
 	"gitlab.doit9.com/server/vertex"
 )
 
@@ -20,10 +24,25 @@ type ConnectionLimiter struct {
 }
 
 func NewConnectionLimiter(max int32) *ConnectionLimiter {
-	return &ConnectionLimiter{
+	ret := &ConnectionLimiter{
 		max:     max,
 		running: 0,
 	}
+
+	go ret.sampleInstrumentation()
+	return ret
+}
+
+func (b *ConnectionLimiter) sampleInstrumentation() {
+
+	host, _ := os.Hostname()
+
+	key := fmt.Sprintf("concurrent_requests.%s", host)
+
+	for range time.Tick(time.Second) {
+		instrument.Gauge(key, int64(b.running))
+	}
+
 }
 
 func (b *ConnectionLimiter) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
@@ -31,7 +50,8 @@ func (b *ConnectionLimiter) Handle(w http.ResponseWriter, r *vertex.Request, nex
 	num := atomic.AddInt32(&b.running, 1)
 	defer atomic.AddInt32(&b.running, -1)
 	if num > b.max {
-		logging.Warning("Connectino limit exceeded: %d/%d", num, b.max)
+		instrument.Hit("over_capacity")
+		logging.Warning("Connection limit exceeded: %d/%d", num, b.max)
 		return nil, vertex.ResourceUnavailableError("Connection Limit Exceeded")
 	}
 

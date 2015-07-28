@@ -31,15 +31,15 @@ func newEntry(value interface{}, ttl time.Duration) *entry {
 func NewCacheMiddleware(maxItems int, ttl time.Duration) *CacheMiddleware {
 	return &CacheMiddleware{
 		cache: lru.New(maxItems),
-		mutex: &sync.Mutex{},
+		mutex: &sync.RWMutex{},
 		ttl:   ttl,
 	}
 }
 
 // Get gets data saved for an URL if present in cache.
 func (m *CacheMiddleware) get(key string) (*entry, error) {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
 
 	data, ok := m.cache.Get(key)
 	if !ok {
@@ -75,7 +75,7 @@ func (m *CacheMiddleware) put(key string, ent *entry) {
 // Note: If the request contains a "Cache-Control: no-cache" header, the middleware will be bypassed
 type CacheMiddleware struct {
 	cache *lru.Cache
-	mutex *sync.Mutex
+	mutex *sync.RWMutex
 	ttl   time.Duration
 }
 
