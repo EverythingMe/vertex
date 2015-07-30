@@ -89,14 +89,16 @@ func init() {
 	vertex.Register("testung", func() *vertex.API {
 
 		return &vertex.API{
-			Name:          "testung",
-			Version:       "1.0",
-			Root:          root,
-			Doc:           "Our fancy testung API",
-			Title:         "Testung API!",
-			Middleware:    middleware.DefaultMiddleware,
-			Renderer:      vertex.JSONRenderer{},
-			AllowInsecure: vertex.Config.Server.AllowInsecure,
+			Name:              "testung",
+			Version:           "1.0",
+			Root:              root,
+			Doc:               "Our fancy testung API",
+			Title:             "Testung API!",
+			Middleware:        middleware.DefaultMiddleware,
+			Renderer:          vertex.JSONRenderer{},
+			AllowInsecure:     vertex.Config.Server.AllowInsecure,
+			SwaggerMiddleware: vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure"}),
+			TestMiddleware:    vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure"}),
 			//DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
 			Routes: vertex.Routes{
 				{

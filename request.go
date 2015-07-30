@@ -45,6 +45,14 @@ func (r *Request) Attribute(key string) (interface{}, bool) {
 	return v, found
 }
 
+// IsLocal returns true if a request is coming from localhost
+func (r *Request) IsLocal() bool {
+
+	// TODO: a real check here
+	return r.RemoteIP == "127.0.0.1" || r.RemoteIP == "::1/128"
+
+}
+
 const DefaultLocale = "en-US"
 
 const HeaderGeoPosition = "X-LatLong"

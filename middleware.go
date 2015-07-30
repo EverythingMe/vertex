@@ -10,6 +10,11 @@ type Middleware interface {
 	Handle(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error)
 }
 
+// MiddlewareChain just wraps a variadic list of middlewares to make your code less ugly :)
+func MiddlewareChain(mw ...Middleware) []Middleware {
+	return mw
+}
+
 // MiddlewareFunc is a wrapper that allows functions to act as middleware
 type MiddlewareFunc func(http.ResponseWriter, *Request, HandlerFunc) (interface{}, error)
 
@@ -40,7 +45,7 @@ func (s *step) append(mw Middleware) {
 	}
 }
 
-func buildChain(mws []Middleware) *step {
+func buildChain(mws ...Middleware) *step {
 	if mws == nil {
 		return nil
 	}
@@ -55,7 +60,7 @@ func buildChain(mws []Middleware) *step {
 	default:
 		return &step{
 			mw:   mws[0],
-			next: buildChain(mws[1:]),
+			next: buildChain(mws[1:]...),
 		}
 	}
 

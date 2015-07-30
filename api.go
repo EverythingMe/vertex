@@ -2,7 +2,6 @@ package vertex
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -30,7 +29,8 @@ type API struct {
 	Renderer              Renderer
 	Routes                Routes
 	Middleware            []Middleware
-	Tests                 []Tester
+	TestMiddleware        []Middleware
+	SwaggerMiddleware     []Middleware
 	AllowInsecure         bool
 }
 
@@ -52,7 +52,7 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 
 	// Build the middleware chain for the API middleware and the rout middleware.
 	// The route middleware comes after the API middleware
-	chain := buildChain(append(a.Middleware, route.Middleware...))
+	chain := buildChain(append(a.Middleware, route.Middleware...)...)
 
 	// add the handler itself as the final middleware
 	handlerMW := MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
@@ -82,6 +82,10 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		chain.append(handlerMW)
 	}
 
+	return a.middlewareHandler(chain, security)
+}
+
+func (a *API) middlewareHandler(chain *step, security SecurityScheme) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 		req := NewRequest(r)
@@ -181,8 +185,15 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 
 	}
 
+	chain := buildChain(a.SwaggerMiddleware...)
+	if chain == nil {
+		chain = buildChain(a.swaggerHandler())
+	} else {
+		chain.append(a.swaggerHandler())
+	}
+
 	// Server the API documentation swagger
-	router.GET(a.FullPath("/swagger"), a.swaggerHandler)
+	router.GET(a.FullPath("/swagger"), a.middlewareHandler(chain, nil))
 
 	// Redirect /$api/$version/console => /console?url=/$api/$version/swagger
 	uiPath := fmt.Sprintf("/console?url=%s", url.QueryEscape(a.FullPath("/swagger")))
@@ -193,15 +204,11 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 }
 
 // swaggerHandler handles the swagger description request for the API
-func (a *API) swaggerHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
-
-	apiDesc := a.ToSwagger(r.Host)
-	b, _ := json.MarshalIndent(apiDesc, "", "  ")
-
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "text/json")
-	fmt.Fprintf(w, string(b))
-
+func (a *API) swaggerHandler() MiddlewareFunc {
+	return MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
+		apiDesc := a.ToSwagger(r.Host)
+		return apiDesc, nil
+	})
 }
 
 // testHandler handles the running of integration tests on the API's special testing url
