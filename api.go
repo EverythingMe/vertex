@@ -195,6 +195,15 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 	// Server the API documentation swagger
 	router.GET(a.FullPath("/swagger"), a.middlewareHandler(chain, nil))
 
+	chain = buildChain(a.TestMiddleware...)
+	if chain == nil {
+		chain = buildChain(a.testHandler())
+	} else {
+		chain.append(a.testHandler())
+	}
+
+	router.GET(path.Join("/test", a.root(), ":category"), a.middlewareHandler(chain, nil))
+
 	// Redirect /$api/$version/console => /console?url=/$api/$version/swagger
 	uiPath := fmt.Sprintf("/console?url=%s", url.QueryEscape(a.FullPath("/swagger")))
 	router.Handler("GET", a.FullPath("/console"), http.RedirectHandler(uiPath, 301))
@@ -212,33 +221,37 @@ func (a *API) swaggerHandler() MiddlewareFunc {
 }
 
 // testHandler handles the running of integration tests on the API's special testing url
-func (a *API) testHandler(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (a *API) testHandler() MiddlewareFunc {
 
-	category := p.ByName("category")
+	return MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 
-	format := r.FormValue("format")
-	switch format {
-	case TestFormatJson:
-		w.Header().Set("Content-Type", "application/json")
-	default:
-		format = TestFormatText
-		w.Header().Set("Content-Type", "text/plain")
-	}
+		category := r.FormValue("category")
 
-	buf := bytes.NewBuffer(nil)
-	runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", r.Host), category, format)
+		format := r.FormValue("format")
+		switch format {
+		case TestFormatJson:
+			w.Header().Set("Content-Type", "application/json")
+		default:
+			format = TestFormatText
+			w.Header().Set("Content-Type", "text/plain")
+		}
 
-	st := time.Now()
-	success := runner.Run()
+		buf := bytes.NewBuffer(nil)
 
-	if success {
-		w.Write(buf.Bytes())
-	} else {
-		http.Error(w, buf.String(), http.StatusInternalServerError)
-	}
+		runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", r.Host), category, format)
 
-	fmt.Fprintln(w, time.Since(st))
+		st := time.Now()
+		success := runner.Run()
 
+		if success {
+			w.Write(buf.Bytes())
+		} else {
+			http.Error(w, buf.String(), http.StatusInternalServerError)
+		}
+
+		fmt.Fprintln(w, time.Since(st))
+		return nil, Hijacked
+	})
 }
 
 // ToSwagger Converts an API definition into a swagger API object for serialization

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"path"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -63,8 +62,6 @@ func (s *Server) AddAPI(a *API) {
 		code, msg := httpError(NewErrorf("Unhandled panic: %s\n%s", v, string(debug.Stack())))
 		http.Error(w, msg, code)
 	}
-
-	s.router.Handle("GET", path.Join("/test", a.root(), ":category"), a.testHandler)
 
 	s.apis = append(s.apis, a)
 }
