@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
 	"gitlab.doit9.com/server/vertex"
@@ -42,7 +41,6 @@ func (f *IPAddressFilter) Deny(addrs ...string) {
 //Access-Control-Allow-Origin
 // CORS is a middleware that injects Access-Control-Allow-Origin headers
 func (f *IPAddressFilter) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
-	fmt.Println(r.RemoteIP)
 	if f.denied != nil {
 		if _, found := f.denied[r.RemoteIP]; found {
 			return nil, vertex.UnauthorizedError("IP Address %s blocked", r.RemoteIP)

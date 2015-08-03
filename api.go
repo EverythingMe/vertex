@@ -3,6 +3,7 @@ package vertex
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"path"
@@ -223,6 +224,12 @@ func (a *API) swaggerHandler() MiddlewareFunc {
 // testHandler handles the running of integration tests on the API's special testing url
 func (a *API) testHandler() MiddlewareFunc {
 
+	// configure server address for testing
+	var serverAddr = "127.0.0.1:9944"
+	if addr, err := net.ResolveTCPAddr("tcp", Config.Server.ListenAddr); err == nil {
+		serverAddr = fmt.Sprintf("127.0.0.1:%d", addr.Port)
+	}
+
 	return MiddlewareFunc(func(w http.ResponseWriter, r *Request, next HandlerFunc) (interface{}, error) {
 
 		category := r.FormValue("category")
@@ -238,7 +245,7 @@ func (a *API) testHandler() MiddlewareFunc {
 
 		buf := bytes.NewBuffer(nil)
 
-		runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", r.Host), category, format)
+		runner := newTestRunner(buf, a, fmt.Sprintf("http://%s", serverAddr), category, format)
 
 		st := time.Now()
 		success := runner.Run()

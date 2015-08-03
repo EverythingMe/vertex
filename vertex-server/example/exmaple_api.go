@@ -97,8 +97,8 @@ func init() {
 			Middleware:        middleware.DefaultMiddleware,
 			Renderer:          vertex.JSONRenderer{},
 			AllowInsecure:     vertex.Config.Server.AllowInsecure,
-			SwaggerMiddleware: vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure"}),
-			TestMiddleware:    vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure"}),
+			SwaggerMiddleware: vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure", true}),
+			TestMiddleware:    vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure", true}),
 			//DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
 			Routes: vertex.Routes{
 				{
@@ -118,7 +118,7 @@ func init() {
 					Test:        vertex.WarningTest(testUserHandler),
 					Returns:     User{},
 					Middleware: []vertex.Middleware{
-						middleware.BasicAuth{config.User, config.Pass, "Secureee"},
+						middleware.BasicAuth{config.User, config.Pass, "Secureee", true},
 					},
 				},
 

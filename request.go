@@ -90,8 +90,7 @@ func (r *Request) parseAddr() {
 			r.RemoteIP = ip.String()
 		}
 
-	}
-	if xri := r.Header.Get("X-Real-Ip"); len(xri) > 0 {
+	} else if xri := r.Header.Get("X-Real-Ip"); len(xri) > 0 {
 		if ip := net.ParseIP(xri); ip != nil {
 			logging.Debug("Setting IP based on XRI header to %s", ip)
 			r.RemoteIP = ip.String()
