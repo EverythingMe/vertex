@@ -122,10 +122,3 @@ func TestRequestInfo(t *testing.T) {
 
 	}
 }
-
-const tpl = ``
-
-func TestRender(t *testing.T) {
-
-	b, err := render(tpl)
-}

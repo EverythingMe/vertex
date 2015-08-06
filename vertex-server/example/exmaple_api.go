@@ -12,7 +12,7 @@ import (
 )
 
 type UserHandler struct {
-	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"query"`
+	Id     string `schema:"id" maxlen:"100" pattern:"[a-zA-Z]+" required:"true" doc:"The Id Of the user" in:"path"`
 	Name   string `schema:"name" maxlen:"100" minlen:"1" required:"true" doc:"The Name Of the user"`
 	Foo    int    `schema:"foo" default:"500"`
 	Banana Banana `schema:"banana" required:"true"`
@@ -20,6 +20,18 @@ type UserHandler struct {
 
 func (h UserHandler) Handle(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {
 	return User{Id: h.Id, Name: h.Name, Banana: h.Banana, Foo: h.Foo}, nil
+}
+
+type User struct {
+	Name   string `json:"name"`
+	Id     string `json:"id"`
+	Banana Banana `json:"banana"`
+	Foo    int    `json:"foo"`
+}
+
+type Banana struct {
+	Foo string
+	Bar string
 }
 
 func testUserHandler(t *vertex.TestContext) {
@@ -43,18 +55,6 @@ func testUserHandler(t *vertex.TestContext) {
 		t.Fail("Error getting json: %v", err)
 	}
 
-}
-
-type User struct {
-	Name   string `json:"name"`
-	Id     string `json:"id"`
-	Banana Banana `json:"banana"`
-	Foo    int    `json:"foo"`
-}
-
-type Banana struct {
-	Foo string
-	Bar string
 }
 
 func (b Banana) UnmarshalRequestData(data string) interface{} {
