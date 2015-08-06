@@ -1,0 +1,3 @@
+Client: me.everything.thrift.Client
+User: me.everything.thrift.User
+WallpaperResponse: me.everything.thrift.WallpaperResponse
