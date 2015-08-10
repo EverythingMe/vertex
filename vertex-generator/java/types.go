@@ -31,24 +31,35 @@ type TypeRef struct {
 	Contained []TypeRef
 }
 
+const (
+	String  = "String"
+	Boolean = "boolean"
+	Integer = "int"
+	Object  = "Object"
+	List    = "List"
+	Float   = "float"
+)
+
+const typesNamespace = "Types"
+
 func newTypeRef(t *jsonschema.Type) TypeRef {
 	ret := TypeRef{}
 	switch swagger.Type(t.Type) {
 	case swagger.String:
-		ret.Type = "String"
+		ret.Type = String
 	case swagger.Number:
-		ret.Type = "Float"
+		ret.Type = Float
 	case swagger.Boolean:
-		ret.Type = "Boolean"
+		ret.Type = Boolean
 	case swagger.Integer:
-		ret.Type = "Integer"
+		ret.Type = Integer
 	case swagger.Array:
-		ret.Type = "List"
+		ret.Type = List
 		ret.Contained = []TypeRef{newTypeRef(t.Items)}
 	case swagger.Object:
-		ret.Type = "Object"
+		ret.Type = Object
 	default:
-		ret.Namespace = "Types"
+		ret.Namespace = typesNamespace
 		if t.Ref != "" {
 			ret.Type = path.Base(t.Ref)
 		} else {
@@ -58,26 +69,26 @@ func newTypeRef(t *jsonschema.Type) TypeRef {
 	return ret
 }
 
-func newTypeRefSwagger(t swagger.Type) TypeRef {
+func newTypeRefSwagger(t swagger.Type, items swagger.Type) TypeRef {
 	ret := TypeRef{}
 	switch t {
 
 	case swagger.Number:
-		ret.Type = "Float"
+		ret.Type = Float
 	case swagger.Boolean:
-		ret.Type = "Boolean"
+		ret.Type = Boolean
 	case swagger.Integer:
-		ret.Type = "Integer"
-		//	case Array:
-		//		ret.Type = "List"
-		//		ret.Contained = []JavaType{newJavaType(t.Items)}
+		ret.Type = Integer
+	case swagger.Array:
+		ret.Type = List
+		ret.Contained = []TypeRef{newTypeRefSwagger(items, "")}
 	case swagger.Object:
 
-		ret.Type = "Object"
+		ret.Type = Object
 	case swagger.String:
 		fallthrough
 	default:
-		ret.Type = "String"
+		ret.Type = String
 	}
 	return ret
 }
@@ -113,17 +124,21 @@ type Method struct {
 
 // Param is a method parameter
 type Param struct {
-	Name string
-	Doc  string
-	Type TypeRef
-	In   string
+	Name     string
+	Doc      string
+	Type     TypeRef
+	In       string
+	Required bool
+	Global   bool
 }
 
 // API holds the java-ready structure of an API definition
 type API struct {
 	Name    string
+	Package string
 	Doc     string
 	Root    string
 	Types   []Class
 	Methods []Method
+	Globals []Param
 }

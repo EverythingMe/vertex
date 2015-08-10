@@ -25,6 +25,7 @@ const (
 	AllowEmptyTag = "allowEmpty"
 	PatternTag    = "pattern"
 	InTag         = "in"
+	GlobalTag     = "global"
 )
 
 // ParamInfo represents metadata about a requests parameter
@@ -86,6 +87,10 @@ type ParamInfo struct {
 	In string
 
 	Hidden bool
+
+	// Is this param a reference to a global definition? If so, we copy its definition to the parameters type
+	// of the generated swagger
+	Global bool
 }
 
 func getTag(f reflect.StructField, key, def string) string {
@@ -162,6 +167,7 @@ func newParamInfo(field reflect.StructField) ParamInfo {
 	ret.MaxLength, _ = intTag(field, MaxLenTag, 0)
 	ret.MinLength, _ = intTag(field, MinLenTag, 0)
 	ret.Hidden = boolTag(field, HiddenTag, false)
+	ret.Global = boolTag(field, GlobalTag, false)
 
 	ret.RawDefault = getTag(field, DefaultTag, "")
 	ret.Default, ret.HasDefault = parseDefault(getTag(field, DefaultTag, ""), field.Type.Kind())
@@ -291,21 +297,25 @@ func NewRequestInfo(T reflect.Type, pth string, description string, returnValue 
 }
 
 // ToSwagger converts the paramInfo into a swagger Param - they are almost the same, but kept separate
-// for decoupling purposes
+// for decoupling purposes.
 func (p ParamInfo) ToSwagger() swagger.Param {
-	return swagger.Param{
+	ret := swagger.Param{
 		Name:        p.Name,
 		Description: p.Description,
-		Type:        swagger.TypeOf(p.Kind, swagger.String),
-		Required:    p.Required,
-		Format:      p.Format,
-		Default:     p.Default,
-		Max:         p.Max,
-		Min:         p.Min,
-		MaxLength:   p.MaxLength,
-		MinLength:   p.MinLength,
-		Pattern:     p.Pattern,
-		Enum:        p.Options,
-		In:          p.In,
+
+		Required:  p.Required,
+		Format:    p.Format,
+		Default:   p.Default,
+		Max:       p.Max,
+		Min:       p.Min,
+		MaxLength: p.MaxLength,
+		MinLength: p.MinLength,
+		Pattern:   p.Pattern,
+		Enum:      p.Options,
+		In:        p.In,
+		Global:    p.Global,
 	}
+
+	ret.Type, ret.Items = swagger.TypeOf(p.Type, swagger.String)
+	return ret
 }

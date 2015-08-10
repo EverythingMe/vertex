@@ -20,22 +20,24 @@ const (
 	Object  Type = "object"
 )
 
-func TypeOf(t reflect.Kind, defaultType Type) Type {
-	switch t {
+func TypeOf(t reflect.Type, defaultType Type) (tp Type, items Type) {
+	switch t.Kind() {
 	case reflect.Bool:
-		return Boolean
+		tp = Boolean
 	case reflect.Int, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint32, reflect.Uint16, reflect.Uint64:
-		return Integer
+		tp = Integer
 	case reflect.Float32, reflect.Float64:
-		return Number
+		tp = Number
 	case reflect.String:
-		return String
+		tp = String
 	case reflect.Array, reflect.Slice:
-		return Array
+		tp = Array
+		items, _ = TypeOf(t.Elem(), defaultType)
 	default:
-		return defaultType
+		tp = defaultType
 	}
+	return
 }
 
 // Contact Info
@@ -63,10 +65,11 @@ type Info struct {
 
 // Param describes a single request param
 type Param struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Required    bool   `json:"required"`
-	Type        Type   `json:"type"`
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
+	Type        Type   `json:"type,omitempty"`
+	Items       Type   `json:"items,omitempty"`
 
 	Format    string      `json:"format,omitempty"`
 	Default   interface{} `json:"default,omitempty"`
@@ -78,7 +81,9 @@ type Param struct {
 	MinLength int         `json:"minLength,omitempty"`
 	Pattern   string      `json:"pattern,omitempty"`
 	Enum      []string    `json:"enum,omitempty"`
-	In        string      `json:"in"`
+	In        string      `json:"in,omitempty"`
+	Global    bool        `json:"-"`
+	Ref       string      `json:"$ref,omitempty"`
 }
 
 // Schema is a generic jsonschema definition - TBD how we want to represent it
@@ -113,6 +118,7 @@ type API struct {
 	Produces       []string          `json:"produces"`
 	Paths          map[string]Path   `json:"paths"`
 	Definitions    map[string]Schema `json:"definitions,omitempty"`
+	Parameters     map[string]Param  `json:"parameters,omitempty"`
 }
 
 func NewAPI(host, title, description, version, basePath string, schemes []string) *API {
@@ -128,6 +134,7 @@ func NewAPI(host, title, description, version, basePath string, schemes []string
 		Paths:          make(map[string]Path),
 		Schemes:        schemes,
 		Definitions:    make(map[string]Schema),
+		Parameters:     make(map[string]Param),
 	}
 }
 

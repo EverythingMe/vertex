@@ -280,6 +280,7 @@ func (a API) ToSwagger(serverUrl string) *swagger.API {
 		p := ret.AddPath(route.Path)
 		method := ri.ToSwagger()
 
+		// copy response definitions to API definitions
 		for rk, resp := range method.Responses {
 
 			if resp.Schema != nil && resp.Schema.Definitions != nil {
@@ -292,13 +293,26 @@ func (a API) ToSwagger(serverUrl string) *swagger.API {
 
 				method.Responses[rk] = resp
 			}
-
 		}
+
+		// copy global param definitions to param definitions
+		for i, parm := range method.Parameters {
+			if parm.Global {
+				ret.Parameters[parm.Name] = parm
+
+				method.Parameters[i] = swagger.Param{Ref: fmt.Sprintf("#/parameters/%s", parm.Name)}
+			}
+		}
+
+		// register methods
 		if route.Methods&POST == POST {
 			p["post"] = method
 		}
 		if route.Methods&GET == GET {
 			p["get"] = method
+		}
+		if route.Methods&PUT == PUT {
+			p["put"] = method
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 	"text/template"
@@ -33,11 +34,14 @@ func NewGenerator() *Generator {
 
 var extendstring string
 var extendfile string
+var pkg string = "com.example.foo"
 
 func init() {
 
 	flag.StringVar(&extendstring, "java.extend", "", "A comma separated list of class:extends. for extending instead of generating classes")
 	flag.StringVar(&extendfile, "java.extendfile", "", "Path to a config YAML containing extention rules")
+	flag.StringVar(&pkg, "java.package", "com.example.foo", "The package the generated API belongs to")
+
 	g := NewGenerator()
 	registry.RegisterGenerator("java", g)
 }
@@ -118,28 +122,37 @@ func formatMethodName(path, verb string) string {
 }
 
 // newJavaMathod creates a new method definition based on a swagger method definition and a return value
-func (g *Generator) newJavaMethod(path, verb string, method swagger.Method) Method {
+func (g *Generator) newJavaMethod(pth, verb string, method swagger.Method) Method {
 
 	ret := Method{
-		Name:     formatMethodName(path, verb),
+		Name:     formatMethodName(pth, verb),
 		Returns:  newTypeRef(method.Responses["default"].Schema.Type),
 		Params:   make([]Param, 0, len(method.Parameters)),
 		HttpVerb: strings.ToUpper(verb),
-		Path:     path,
+		Path:     pth,
 		Doc:      method.Description,
 	}
 
 	for _, param := range method.Parameters {
-		if param.In != "header" {
-			jparm := Param{
-				Name: param.Name,
-				Type: newTypeRefSwagger(param.Type),
-				Doc:  param.Description,
-				In:   param.In,
+		var jparm Param
+		if param.Ref == "" {
+			jparm = Param{
+				Name:     param.Name,
+				Type:     newTypeRefSwagger(param.Type, param.Items),
+				Doc:      param.Description,
+				In:       param.In,
+				Required: param.Required,
+			}
+		} else {
+			_, ref := path.Split(param.Ref)
+			jparm = Param{
+				Name:   ref,
+				Global: true,
 			}
 
-			ret.Params = append(ret.Params, jparm)
 		}
+
+		ret.Params = append(ret.Params, jparm)
 
 	}
 	return ret
@@ -191,10 +204,12 @@ func (g *Generator) newJavaAPI(swapi *swagger.API) API {
 
 	api := API{
 		Name:    cleanRe.ReplaceAllString(swapi.Info.Title, ""),
+		Package: pkg,
 		Doc:     swapi.Info.Description,
 		Root:    swapi.Basepath,
 		Types:   make([]Class, 0, len(swapi.Definitions)),
 		Methods: make([]Method, 0, len(swapi.Paths)),
+		Globals: make([]Param, 0),
 	}
 
 	for name, tp := range swapi.Definitions {
@@ -208,6 +223,17 @@ func (g *Generator) newJavaAPI(swapi *swagger.API) API {
 		}
 	}
 
+	for _, param := range swapi.Parameters {
+
+		jparm := Param{
+			Name: param.Name,
+			Type: newTypeRefSwagger(param.Type, param.Items),
+			Doc:  param.Description,
+			In:   param.In,
+		}
+		api.Globals = append(api.Globals, jparm)
+	}
+
 	return api
 }
 
@@ -217,9 +243,11 @@ func renderArguments(args []Param) string {
 		return ""
 	}
 
-	argstrs := make([]string, len(args))
-	for i, arg := range args {
-		argstrs[i] = fmt.Sprintf("%s %s", arg.Type, arg.Name)
+	argstrs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if !arg.Global && arg.In != "header" {
+			argstrs = append(argstrs, fmt.Sprintf("%s %s", arg.Type, arg.Name))
+		}
 	}
 
 	return strings.Join(argstrs, ", ")
