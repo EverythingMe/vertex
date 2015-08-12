@@ -33,15 +33,21 @@ func (f *IPRangeFilter) AlloPrivate() *IPRangeFilter {
 
 // Allow allows traffic from the given allowed CIDRs
 func (f *IPRangeFilter) Allow(cidrs ...string) *IPRangeFilter {
-	f.allowed = make([]*net.IPNet, 0, len(cidrs))
+	//f.allowed = make([]*net.IPNet, 0, len(cidrs))
+
 	for _, addr := range cidrs {
 
+		// for normal addresses - we add /32 to make it a single address cidr
+		if ip := net.ParseIP(addr); ip != nil {
+			addr = addr + "/32"
+
+		}
 		_, ipnet, err := net.ParseCIDR(addr)
 		if err != nil {
 			logging.Error("Error parsing CIDR: %s", err)
 			continue
 		}
-		logging.Info("Allowing traffic from %s", ipnet)
+		logging.Info("Allowing traffic from %s (%s)", ipnet, addr)
 		f.allowed = append(f.allowed, ipnet)
 
 	}
@@ -54,7 +60,10 @@ func (f *IPRangeFilter) Deny(cidrs ...string) *IPRangeFilter {
 	f.denied = make([]*net.IPNet, 0, len(cidrs))
 
 	for _, addr := range cidrs {
+		if ip := net.ParseIP(addr); ip != nil {
+			addr = addr + "/32"
 
+		}
 		_, ipnet, err := net.ParseCIDR(addr)
 		if err != nil {
 			logging.Error("Error parsing CIDR: %s", err)
