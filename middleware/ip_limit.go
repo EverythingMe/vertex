@@ -1,54 +1,90 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
+
+	"github.com/dvirsky/go-pylog/logging"
 
 	"gitlab.doit9.com/server/vertex"
 )
 
-type IPAddressFilter struct {
-	allowed map[string]struct{}
-	denied  map[string]struct{}
+// IPRangeFilter allows or denies ips based on a given set of IP ranges (CIDRs)
+type IPRangeFilter struct {
+	allowed []*net.IPNet
+	denied  []*net.IPNet
 }
 
-func NewIPAddressFilter(allowed ...string) *IPAddressFilter {
-	ret := &IPAddressFilter{
-		allowed: map[string]struct{}{},
+// NewIPRangeFilter creates a new filter with the given allowed CIDRs (e.g. 127.0.0.0/8 for local addresses)
+func NewIPRangeFilter(allowed ...string) *IPRangeFilter {
+	ret := &IPRangeFilter{
+		allowed: make([]*net.IPNet, 0, len(allowed)),
 	}
 
-	for _, addr := range allowed {
-		ret.allowed[addr] = struct{}{}
-	}
+	ret.Allow(allowed...)
 	return ret
 }
 
-func (f *IPAddressFilter) Allow(addrs ...string) {
-	f.allowed = map[string]struct{}{}
-
-	for _, addr := range addrs {
-		f.allowed[addr] = struct{}{}
-	}
+// AlloPrivate allows IP ranges from all private ranges according to RFC 1918
+func (f *IPRangeFilter) AlloPrivate() *IPRangeFilter {
+	f.Allow("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8")
+	return f
 }
 
-func (f *IPAddressFilter) Deny(addrs ...string) {
-	f.denied = map[string]struct{}{}
+// Allow allows traffic from the given allowed CIDRs
+func (f *IPRangeFilter) Allow(cidrs ...string) *IPRangeFilter {
+	f.allowed = make([]*net.IPNet, 0, len(cidrs))
+	for _, addr := range cidrs {
 
-	for _, addr := range addrs {
-		f.denied[addr] = struct{}{}
-	}
-}
-
-//Access-Control-Allow-Origin
-// CORS is a middleware that injects Access-Control-Allow-Origin headers
-func (f *IPAddressFilter) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
-	if f.denied != nil {
-		if _, found := f.denied[r.RemoteIP]; found {
-			return nil, vertex.UnauthorizedError("IP Address %s blocked", r.RemoteIP)
+		_, ipnet, err := net.ParseCIDR(addr)
+		if err != nil {
+			logging.Error("Error parsing CIDR: %s", err)
+			continue
 		}
+		logging.Info("Allowing traffic from %s", ipnet)
+		f.allowed = append(f.allowed, ipnet)
+
 	}
 
-	if _, found := f.allowed[r.RemoteIP]; !found {
-		return nil, vertex.UnauthorizedError("IP Address %s blocked", r.RemoteIP)
+	return f
+}
+
+// Deny denies traffic from the given CIDRs (e.g. 127.0.0.0/8 for local addresses)
+func (f *IPRangeFilter) Deny(cidrs ...string) *IPRangeFilter {
+	f.denied = make([]*net.IPNet, 0, len(cidrs))
+
+	for _, addr := range cidrs {
+
+		_, ipnet, err := net.ParseCIDR(addr)
+		if err != nil {
+			logging.Error("Error parsing CIDR: %s", err)
+			continue
+		}
+		f.denied = append(f.denied, ipnet)
+
 	}
-	return next(w, r)
+	return f
+}
+
+// Handle checks the current requests IP against the allowed and blocked IP ranges in the filter
+func (f *IPRangeFilter) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
+	ip := net.ParseIP(r.RemoteIP)
+
+	if f.denied != nil {
+		for _, ipnet := range f.denied {
+			if ipnet.Contains(ip) {
+				return nil, vertex.UnauthorizedError("IP Address %s blocked", r.RemoteIP)
+			}
+		}
+
+	}
+
+	for _, ipnet := range f.allowed {
+		if ipnet.Contains(ip) {
+			logging.Info("IP Address %s allowed", r.RemoteIP)
+			return next(w, r)
+		}
+
+	}
+	return nil, vertex.UnauthorizedError("IP Address %s not allowed", r.RemoteIP)
 }

@@ -102,8 +102,10 @@ func init() {
 			Middleware:    middleware.DefaultMiddleware,
 			Renderer:      vertex.JSONRenderer{},
 			AllowInsecure: vertex.Config.Server.AllowInsecure,
-			SwaggerMiddleware: vertex.MiddlewareChain(middleware.NewCORS().Default(),
-				middleware.BasicAuth{config.User, config.Pass, "Secure", true}),
+			SwaggerMiddleware: vertex.MiddlewareChain(
+				middleware.NewCORS().Default(),
+				middleware.NewIPRangeFilter().AlloPrivate(),
+			),
 			TestMiddleware: vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure", true}),
 			//DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
 			Routes: vertex.Routes{
