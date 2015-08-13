@@ -26,7 +26,7 @@ func NewIPRangeFilter(allowed ...string) *IPRangeFilter {
 }
 
 // AlloPrivate allows IP ranges from all private ranges according to RFC 1918
-func (f *IPRangeFilter) AlloPrivate() *IPRangeFilter {
+func (f *IPRangeFilter) AllowPrivate() *IPRangeFilter {
 	f.Allow("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8")
 	return f
 }
