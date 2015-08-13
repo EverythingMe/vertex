@@ -13,6 +13,7 @@ package {{ .Package }};
 
 import java.util.HashMap;
 import java.util.Map;
+import java.io.Serializable;
 
 import everything.me.vertex.BaseAPI;
 import everything.me.vertex.Client;
@@ -34,7 +35,7 @@ public class {{.Name}} extends BaseAPI {
     
     public static class Types {
         {{ range .Types }}
-        public static class {{ .Name }}{{if .Extends}} extends {{ .Extends }} {} {{else}} {
+        public static class {{ .Name }}{{if .Extends}} extends {{ .Extends }} implements Serializable {} {{else}} implements Serializable {
         {{ range .Members }}\
         public {{ .Type }} {{ .Name }};
         {{ end }}
