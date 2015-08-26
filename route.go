@@ -22,6 +22,7 @@ type Route struct {
 	Middleware  []Middleware
 	Test        Tester
 	Returns     interface{}
+	Renderer    Renderer
 	requestInfo schema.RequestInfo
 }
 

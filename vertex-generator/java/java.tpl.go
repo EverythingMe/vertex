@@ -62,6 +62,7 @@ public class {{.Name}} extends BaseAPI {
     **/{{ template "decorators" . }}\
     public CompletableFuture<{{ .Returns }}> {{ .Name }}({{ renderArguments .Params }}) {
         {{ template "buildMaps" . }}\
+        
         return perform(Request.Method.{{ .HttpVerb }}, "{{.Path}}",
                        params,
                        pathParams,
@@ -83,7 +84,7 @@ public class {{.Name}} extends BaseAPI {
 {{ define "buildMaps" }}
         Map<String,Object> pathParams = new HashMap<>();
         Request.ParamMap params = new Request.ParamMap();\
-{{ range .Params }}{{ if eq .In "query" "body" "header" }}
+{{ range .Params }}{{ if eq .In "query" "body" }}
         params.set("{{.Name}}", {{.Name}});
 {{ else if eq .In "path" }}\
         pathParams.put("{{.Name}}", {{.Name}});{{end}}

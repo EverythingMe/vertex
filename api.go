@@ -83,10 +83,16 @@ func (a *API) handler(route Route) func(w http.ResponseWriter, r *http.Request, 
 		chain.append(handlerMW)
 	}
 
-	return a.middlewareHandler(chain, security)
+	return a.middlewareHandler(chain, security, route.Renderer)
 }
 
-func (a *API) middlewareHandler(chain *step, security SecurityScheme) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+func (a *API) middlewareHandler(chain *step, security SecurityScheme, renderer Renderer) func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+
+	// allow overriding the API's default renderer with a per-route one
+	if renderer == nil {
+		renderer = a.Renderer
+	}
+
 	return func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
 
 		req := NewRequest(r)
@@ -123,7 +129,8 @@ func (a *API) middlewareHandler(chain *step, security SecurityScheme) func(w htt
 		}
 
 		if err != Hijacked {
-			if err = a.Renderer.Render(ret, err, w, req); err != nil {
+
+			if err = renderer.Render(ret, err, w, req); err != nil {
 				logging.Error("Error rendering response: %s", err)
 			}
 		} else {
@@ -194,7 +201,7 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 	}
 
 	// Server the API documentation swagger
-	router.GET(a.FullPath("/swagger"), a.middlewareHandler(chain, nil))
+	router.GET(a.FullPath("/swagger"), a.middlewareHandler(chain, nil, nil))
 
 	chain = buildChain(a.TestMiddleware...)
 	if chain == nil {
@@ -203,7 +210,7 @@ func (a *API) configure(router *httprouter.Router) *httprouter.Router {
 		chain.append(a.testHandler())
 	}
 
-	router.GET(path.Join("/test", a.root(), ":category"), a.middlewareHandler(chain, nil))
+	router.GET(path.Join("/test", a.root(), ":category"), a.middlewareHandler(chain, nil, nil))
 
 	// Redirect /$api/$version/console => /console?url=/$api/$version/swagger
 	uiPath := fmt.Sprintf("/console?url=%s", url.QueryEscape(a.FullPath("/swagger")))

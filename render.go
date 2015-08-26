@@ -3,7 +3,9 @@ package vertex
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/dvirsky/go-pylog/logging"
@@ -106,4 +108,66 @@ func writeResponse(w http.ResponseWriter, r *Request, response interface{}, e er
 	}
 
 	return
+}
+
+type HTMLRenderer struct {
+	template *template.Template
+}
+
+func NewHTMLRendererFiles(funcMap map[string]interface{}, fileNames ...string) *HTMLRenderer {
+
+	if funcMap == nil {
+		funcMap = template.FuncMap{}
+	}
+
+	tpl, err := template.New("html").Funcs(funcMap).ParseFiles(fileNames...)
+	if err != nil {
+		panic(err)
+	}
+
+	logging.Info("Created template from files %s (%#v)", fileNames, tpl)
+	tpl.ExecuteTemplate(os.Stderr, "html", nil)
+	return &HTMLRenderer{
+		template: tpl,
+	}
+}
+
+func NewHTMLRenderer(src string, funcMap template.FuncMap) *HTMLRenderer {
+
+	if funcMap == nil {
+		funcMap = template.FuncMap{}
+	}
+
+	tpl, err := template.New("html").Funcs(funcMap).Parse(src)
+	if err != nil {
+		panic(err)
+	}
+
+	return &HTMLRenderer{
+		template: tpl,
+	}
+
+}
+
+func (h *HTMLRenderer) Render(v interface{}, e error, w http.ResponseWriter, r *Request) error {
+
+	// Dump meta-data headers
+	w.Header().Set(HeaderProcessingTime, fmt.Sprintf("%.03f", time.Since(r.StartTime).Seconds()*1000))
+	w.Header().Set(HeaderRequestId, r.RequestId)
+
+	// Dump Error if the request failed
+	if e != nil {
+		code, message := httpError(e)
+		http.Error(w, message, code)
+		return nil
+	}
+
+	if err := h.template.ExecuteTemplate(w, "html", v); err != nil {
+		http.Error(w, "Could not render html template: "+err.Error(), http.StatusInternalServerError)
+	}
+	return nil
+}
+
+func (h *HTMLRenderer) ContentTypes() []string {
+	return []string{"text/html"}
 }
