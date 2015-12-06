@@ -8,9 +8,9 @@ import (
 	"reflect"
 	"testing"
 
-	"gitlab.doit9.com/server/vertex"
-	"gitlab.doit9.com/server/vertex/middleware"
-	"gitlab.doit9.com/server/vertex/swagger"
+	"github.com/EverythingMe/vertex"
+	"github.com/EverythingMe/vertex/middleware"
+	"github.com/EverythingMe/vertex/swagger"
 )
 
 type UserHandler struct {

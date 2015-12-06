@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/dvirsky/go-pylog/logging"
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 // RequestLogger is a middleware that logs the paths and return values of all requests

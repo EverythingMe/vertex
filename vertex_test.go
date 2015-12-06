@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.doit9.com/server/vertex/schema"
+	"github.com/EverythingMe/vertex/schema"
 
 	"github.com/stretchr/testify/assert"
 )

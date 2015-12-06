@@ -5,7 +5,7 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 // BasicAuth is a middleware that forces basic auth user/pass authentication on requests.

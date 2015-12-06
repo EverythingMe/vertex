@@ -15,8 +15,8 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/alecthomas/jsonschema"
-	"gitlab.doit9.com/server/vertex/swagger"
-	"gitlab.doit9.com/server/vertex/vertex-generator/registry"
+	"github.com/EverythingMe/vertex/swagger"
+	"github.com/EverythingMe/vertex/vertex-generator/registry"
 )
 
 // Generator is a code geneator that renders a complete Java client API code from a swagger definition of

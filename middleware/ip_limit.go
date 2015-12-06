@@ -6,7 +6,7 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 // IPRangeFilter allows or denies ips based on a given set of IP ranges (CIDRs)

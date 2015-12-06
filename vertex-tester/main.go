@@ -7,8 +7,8 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/server/vertex"
-	_ "gitlab.doit9.com/server/vertex/vertex-server/example"
+	"github.com/EverythingMe/vertex"
+	_ "github.com/EverythingMe/vertex/vertex-server/example"
 )
 
 func init() {

@@ -5,7 +5,7 @@ import (
 
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 // AutoRecover is a middleware that recovers automatically from panics inside request handlers

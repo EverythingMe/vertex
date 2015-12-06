@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"gitlab.doit9.com/server/vertex/swagger"
+	"github.com/EverythingMe/vertex/swagger"
 )
 
 var swg = `

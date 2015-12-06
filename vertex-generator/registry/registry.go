@@ -1,6 +1,6 @@
 package registry
 
-import "gitlab.doit9.com/server/vertex/swagger"
+import "github.com/EverythingMe/vertex/swagger"
 
 type Generator interface {
 	Generate(*swagger.API) ([]byte, error)

@@ -1,6 +1,6 @@
 # vertex
 --
-    import "gitlab.doit9.com/backend/vertex"
+    import "github.com/EverythingMe/vertex"
 
 Vertex is a friendly, fast and flexible RESTful API building framework
 
@@ -199,22 +199,24 @@ the user, validate the API key, etc.
 
 ### Middleware
 
-Vertex comes with some middleware modules included. Currently implemented middleware include:
+Vertex comes with some middleware modules included. Currently implemented
+middleware include:
 
-- CORS configuration
-- Auto Recover from panic in handlers
-- Request Logging
-- OAuth authentication
-- IP-range filter
-- Simple API Key validation
-- HTTP Basic Auth
-- Response Caching
-- Force Secure (https) Access
+    - CORS configuration
+    - Auto Recover from panic in handlers
+    - Request Logging
+    - OAuth authentication
+    - IP-range filter
+    - Simple API Key validation
+    - HTTP Basic Auth
+    - Response Caching
+    - Force Secure (https) Access
 
 
 ### Renderers
 
-Responses have renderers - that transform the response object to some serialization format. 
+Responses have renderers - that transform the response object to some
+serialization format.
 
 The default is of course JSON, but an HTML renderer using templates also exists.
 
@@ -320,6 +322,7 @@ var Config = struct {
 		AllowInsecure:    false,
 		ConsoleFilesPath: "../console",
 		LoggingLevel:     "INFO",
+		ClientTimeout:    60,
 	},
 
 	Auth: authConfig{
@@ -338,6 +341,12 @@ var Hijacked = newErrorCode(ErrHijacked, "Request Hijacked, Do not rendere respo
 ```
 A special error that should be returned when hijacking a request, taking over
 response rendering from the renderer
+
+```go
+var NopSecurity = SecuritySchemeFunc(func(r *Request) error {
+	return nil
+})
+```
 
 #### func  BackOffError
 
@@ -394,6 +403,14 @@ func IsHijacked(err error) bool
 IsHijacked inspects an error and checks whether it represents a hijacked
 response
 
+#### func  MiddlewareChain
+
+```go
+func MiddlewareChain(mw ...Middleware) []Middleware
+```
+MiddlewareChain just wraps a variadic list of middlewares to make your code less
+ugly :)
+
 #### func  MissingParamError
 
 ```go
@@ -445,13 +462,13 @@ BEFORE we call the builder, so the builder can use values in the config struct.
 ```go
 func ResourceUnavailableError(msg string, args ...interface{}) error
 ```
-ResourceUnavailable returns an error meaning we do not want to server this
+ResourceUnavailable returns an error meaning we do not want to serve this
 request, the client should not retry
 
 #### func  RunCLITest
 
 ```go
-func RunCLITest(apiName, serverAddr, category, format string) bool
+func RunCLITest(apiName, serverAddr, category, format string, out io.Writer) bool
 ```
 
 #### func  UnauthorizedError
@@ -475,7 +492,8 @@ type API struct {
 	Renderer              Renderer
 	Routes                Routes
 	Middleware            []Middleware
-	Tests                 []Tester
+	TestMiddleware        []Middleware
+	SwaggerMiddleware     []Middleware
 	AllowInsecure         bool
 }
 ```
@@ -499,6 +517,38 @@ e.g. if my API name is "myapi" and the version is 1.0, FullPath("/foo") returns
 func (a API) ToSwagger(serverUrl string) *swagger.API
 ```
 ToSwagger Converts an API definition into a swagger API object for serialization
+
+#### type HTMLRenderer
+
+```go
+type HTMLRenderer struct {
+}
+```
+
+
+#### func  NewHTMLRenderer
+
+```go
+func NewHTMLRenderer(src string, funcMap template.FuncMap) *HTMLRenderer
+```
+
+#### func  NewHTMLRendererFiles
+
+```go
+func NewHTMLRendererFiles(funcMap map[string]interface{}, fileNames ...string) *HTMLRenderer
+```
+
+#### func (*HTMLRenderer) ContentTypes
+
+```go
+func (h *HTMLRenderer) ContentTypes() []string
+```
+
+#### func (*HTMLRenderer) Render
+
+```go
+func (h *HTMLRenderer) Render(v interface{}, e error, w http.ResponseWriter, r *Request) error
+```
 
 #### type HandlerFunc
 
@@ -630,16 +680,36 @@ type Request struct {
 
 Request wraps the standard http request object with higher level contextual data
 
+#### func  NewRequest
+
+```go
+func NewRequest(r *http.Request) *Request
+```
+NewRequest wraps a new http request with a vertex request
+
 #### func (*Request) Attribute
 
 ```go
 func (r *Request) Attribute(key string) (interface{}, bool)
 ```
 
+#### func (*Request) IsLocal
+
+```go
+func (r *Request) IsLocal() bool
+```
+IsLocal returns true if a request is coming from localhost
+
 #### func (*Request) SetAttribute
 
 ```go
 func (r *Request) SetAttribute(key string, val interface{})
+```
+
+#### func (*Request) String
+
+```go
+func (r *Request) String() string
 ```
 
 #### type RequestHandler
@@ -670,6 +740,12 @@ An example Request handler:
 Supported types for automatic param mapping: string, int(32/64), float(32/64),
 bool, []string
 
+#### func  Hijacker
+
+```go
+func Hijacker(f func(w http.ResponseWriter, r *Request)) RequestHandler
+```
+
 #### func  StaticHandler
 
 ```go
@@ -684,6 +760,12 @@ NOTE: root should be the full path to the API root. so if your handler path is
 "/static/*filepath", root should be something like "/myapi/1.0/static". Because
 the handler is created before the API object is configured, we do not know the
 root on creation
+
+#### func  Wrap
+
+```go
+func Wrap(f func(w http.ResponseWriter, r *http.Request)) RequestHandler
+```
 
 #### type RequestValidator
 
@@ -721,6 +803,7 @@ type Route struct {
 	Middleware  []Middleware
 	Test        Tester
 	Returns     interface{}
+	Renderer    Renderer
 }
 ```
 
@@ -746,6 +829,19 @@ type SecurityScheme interface {
 SecurityScheme is a special interface that validates a request and is outside
 the middleware chain. An API has a default security scheme, and each route can
 override it
+
+#### type SecuritySchemeFunc
+
+```go
+type SecuritySchemeFunc func(r *Request) error
+```
+
+
+#### func (SecuritySchemeFunc) Validate
+
+```go
+func (f SecuritySchemeFunc) Validate(r *Request) error
+```
 
 #### type Server
 
@@ -783,6 +879,7 @@ Handler returns the underlying router, mainly for testing
 ```go
 func (s *Server) InitAPIs()
 ```
+InitAPIs initializes and adds all the APIs registered from API builders
 
 #### func (*Server) Run
 

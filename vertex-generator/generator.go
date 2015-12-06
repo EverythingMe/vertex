@@ -10,9 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"gitlab.doit9.com/server/vertex/swagger"
-	_ "gitlab.doit9.com/server/vertex/vertex-generator/java"
-	"gitlab.doit9.com/server/vertex/vertex-generator/registry"
+	"github.com/EverythingMe/vertex/swagger"
+	_ "github.com/EverythingMe/vertex/vertex-generator/java"
+	"github.com/EverythingMe/vertex/vertex-generator/registry"
 )
 
 func die(msg string, args ...interface{}) {

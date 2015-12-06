@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 type ForceSecure struct {

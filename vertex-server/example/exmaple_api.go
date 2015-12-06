@@ -7,8 +7,8 @@ import (
 	"path"
 	"strings"
 
-	"gitlab.doit9.com/server/vertex"
-	"gitlab.doit9.com/server/vertex/middleware"
+	"github.com/EverythingMe/vertex"
+	"github.com/EverythingMe/vertex/middleware"
 )
 
 type BaseHandler struct {

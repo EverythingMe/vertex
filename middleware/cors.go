@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 type CORS struct {
@@ -16,6 +16,7 @@ type CORS struct {
 }
 
 //Access-Control-Allow-Origin
+
 // CORS is a middleware that injects Access-Control-Allow-Origin headers
 func (c *CORS) Handle(w http.ResponseWriter, r *vertex.Request, next vertex.HandlerFunc) (interface{}, error) {
 	if c.AllowOrigin != "" {
@@ -47,6 +48,7 @@ func NewCORS() *CORS {
 	}
 }
 
+// Default initializes a generic CORS configuration
 func (c *CORS) Default() *CORS {
 	c.ExposeHeaders("WWW-Authenticate", "Authorization")
 	c.AllowHeaders(c.exposeHeaders...)

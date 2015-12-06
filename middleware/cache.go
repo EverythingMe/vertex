@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 import (
@@ -28,6 +28,7 @@ func newEntry(value interface{}, ttl time.Duration) *entry {
 	}
 }
 
+// NewCacheMiddleware creates a new Cache middleware
 func NewCacheMiddleware(maxItems int, ttl time.Duration) *CacheMiddleware {
 	return &CacheMiddleware{
 		cache: lru.New(maxItems),

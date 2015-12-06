@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 var mockkHandler = vertex.HandlerFunc(func(w http.ResponseWriter, r *vertex.Request) (interface{}, error) {

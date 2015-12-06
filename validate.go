@@ -1,7 +1,7 @@
 package vertex
 
 import (
-	"gitlab.doit9.com/server/vertex/schema"
+	"github.com/EverythingMe/vertex/schema"
 	"net/http"
 	"reflect"
 	"regexp"

@@ -176,11 +176,22 @@
 //
 // Middleware
 //
-// TODO
+// Vertex comes with some middleware modules included. Currently implemented middleware include:
+//  - CORS configuration
+//  - Auto Recover from panic in handlers
+//  - Request Logging
+//  - OAuth authentication
+//  - IP-range filter
+//  - Simple API Key validation
+//  - HTTP Basic Auth
+//  - Response Caching
+//  - Force Secure (https) Access
 //
 // Renderers
 //
-// TODO
+// Responses have renderers - that transform the response object to some serialization format.
+//
+// The default is of course JSON, but an HTML renderer using templates also exists.
 //
 // Running The Server
 //

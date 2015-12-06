@@ -1,3 +1,5 @@
+// This middleware package for OAauth is incomplete (although it's working).
+// It needs tests and some more documentation. Any help is welcome...
 package oauth
 
 import (
@@ -9,19 +11,25 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/dvirsky/go-pylog/logging"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 
 	"golang.org/x/oauth2"
 )
 
+// TokenProtocol is an interface for encoding/decoding user tokens. Currently we're using a JWT token encoder/decoder
 type TokenProtocol interface {
 	EncodeToken(interface{}) (string, error)
 	DecodeToken(string) (interface{}, error)
 }
+
+// UserValidator takes care of logging in users with tokens. Currently uses JWT encoding of the user id, without any DB behind this
 type UserValidator interface {
 	TokenProtocol
 	Login(token *oauth2.Token) (interface{}, error)
 }
+
+// OAuthMiddleware is a middleware that can protect routes and make sure the user is logged in.
+// It uses JWT to encode cookies with the user token
 type OAuthMiddleware struct {
 	conf          *oauth2.Config
 	jwtKey        []byte
@@ -48,6 +56,7 @@ type Config struct {
 	Scopes []string `yaml:"scopes"`
 }
 
+// NewOAuthMiddleware crea
 func NewOAuthMiddleware(config *Config, validator UserValidator) *OAuthMiddleware {
 
 	return &OAuthMiddleware{
@@ -88,6 +97,7 @@ func (o *OAuthMiddleware) getToken(r *vertex.Request) (interface{}, error) {
 
 }
 
+// JWTAuthenticator authenticates users from JWT encoded cookies
 type JWTAuthenticator struct {
 	key []byte
 }
@@ -110,9 +120,12 @@ func (j *JWTAuthenticator) EncodeToken(data interface{}) (string, error) {
 	return sstr, err
 }
 
+// Login just returns the access token. In a real-world situation here's where you'd want to
+// talk to your database
 func (j *JWTAuthenticator) Login(token *oauth2.Token) (interface{}, error) {
 	return token.AccessToken, nil
 }
+
 func (j *JWTAuthenticator) DecodeToken(data string) (interface{}, error) {
 	token, err := jwt.Parse(data, func(token *jwt.Token) (interface{}, error) {
 		return j.key, nil

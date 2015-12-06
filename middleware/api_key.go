@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"gitlab.doit9.com/server/vertex"
+	"github.com/EverythingMe/vertex"
 )
 
 // APIKeyValidator is a simple request validator middleware that looks for an API key in the request form.

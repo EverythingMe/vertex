@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"gitlab.doit9.com/server/vertex/swagger"
+	"github.com/EverythingMe/vertex/swagger"
 )
 
 type MockHandler struct {
