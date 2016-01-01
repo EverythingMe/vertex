@@ -104,7 +104,7 @@ func init() {
 			AllowInsecure: vertex.Config.Server.AllowInsecure,
 			SwaggerMiddleware: vertex.MiddlewareChain(
 				middleware.NewCORS().Default(),
-				middleware.NewIPRangeFilter().AlloPrivate(),
+				middleware.NewIPRangeFilter().AllowPrivate(),
 			),
 			TestMiddleware: vertex.MiddlewareChain(middleware.BasicAuth{config.User, config.Pass, "Secure", true}),
 			//DefaultSecurityScheme: vertex.SecuritySchemeFunc(APIKeyValidator),
