@@ -13,11 +13,13 @@ Vertex is a friendly, fast and flexible RESTful API building framework
 
 3. Automatic Data Validation
 
-4. An integrated testing framework for your API
+4. Automatic generation of Swagger from API definitions, for easy documentation 
 
-5. A middleware framework similar (but not compliant) to negroni
+5. An integrated testing framework for your API
 
-6. Batteries included: JSON rendering, Auto Recover, Static File Serving,
+6. A middleware framework similar (but not compatible) to negroni
+
+7. Batteries included: JSON rendering, Auto Recover, Static File Serving,
 Request Logging, and more
 
 
